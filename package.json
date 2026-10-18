@@ -1,0 +1,27 @@
+{
+  "name": "dbea-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "RemitEase (IS444 Team 3) - Next.js frontend for the OutSystems backend",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "rabbitmq:up": "docker compose -f infra/rabbitmq/docker-compose.yml up -d",
+    "rabbitmq:down": "docker compose -f infra/rabbitmq/docker-compose.yml down",
+    "rabbitmq:status": "docker compose -f infra/rabbitmq/docker-compose.yml ps",
+    "rabbitmq:url": "node infra/rabbitmq/tunnel-url.mjs"
+  },
+  "dependencies": {
+    "next": "16.4.2",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/turbopack": "^4",
+    "eslint": "^9",
+    "eslint-config-next": "^14.2.35",
+    "tailwindcss": "^4"
+  }
+}

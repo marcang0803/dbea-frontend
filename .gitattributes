@@ -1,0 +1,4 @@
+# Store text files with LF in git; each OS checks out its native line endings.
+* text=auto
+*.svg text
+*.sh text eol=lf
