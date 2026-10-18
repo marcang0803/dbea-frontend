@@ -1,0 +1,8 @@
+@import "tailwindcss";
+
+/* RemitEase uses a light theme. Pages and components style themselves with Tailwind classes. */
+body {
+  background: #f8fafc; /* slate-50 */
+  color: #0f172a; /* slate-900 */
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+}

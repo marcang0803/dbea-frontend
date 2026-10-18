@@ -1,0 +1,45 @@
+# RemitEase (Team 3) — RabbitMQ broker for the notification queue (P3)
+#
+# Runs on one team member's laptop only when needed (testing, demo).
+# OutSystems runs in SMU's cloud and cannot reach localhost, so the `tunnel`
+# service publishes ONLY the RabbitMQ management HTTP API (port 15672) on a
+# temporary https://<random>.trycloudflare.com address. The SMULab RabbitMQ
+# wrapper talks to that API; AMQP (5672) is not needed and is not exposed.
+#
+# Usage: see README.md in this folder.
+
+name: t3re-rabbitmq
+
+services:
+  rabbitmq:
+    image: rabbitmq:4.3-management
+    hostname: t3re-rabbit            # fixed, so data in the volume stays attached to the same node name
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?Set RABBITMQ_USER in .env}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD in .env}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-t3re}
+    ports:
+      # Management UI/API for this laptop only (http://localhost:15672). Not open to your network.
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+  tunnel:
+    # Cloudflare Quick Tunnel: no account needed. Prints a random https://*.trycloudflare.com URL
+    # in its logs. The URL changes every time this container restarts.
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate --url http://rabbitmq:15672
+    restart: unless-stopped
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+volumes:
+  rabbitmq-data:
