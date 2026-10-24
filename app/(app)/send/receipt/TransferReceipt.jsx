@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { announceNotificationsChanged, ApiError, isSessionExpired } from '@/lib/p3Api';
 import { p2Api } from '@/lib/p2Api';
+import { loadCachedQuote } from '@/lib/p2QuoteCache';
 import { formatDateTime, formatMoney } from '@/lib/format';
 
 function ReceiptRow({ label, children, strong = false }) {
@@ -26,6 +27,15 @@ export default function TransferReceipt({ quoteId }) {
 
   useEffect(() => {
     if (!quoteId) return;
+    const cached = loadCachedQuote(quoteId);
+    if (cached?.sent) {
+      const timer = setTimeout(() => {
+        setReceipt(cached);
+        announceNotificationsChanged();
+        setLoading(false);
+      }, 0);
+      return () => clearTimeout(timer);
+    }
     const controller = new AbortController();
     p2Api.getQuote(quoteId, { signal: controller.signal }).then(
       ({ data }) => {

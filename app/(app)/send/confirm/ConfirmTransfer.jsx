@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import OtpDialog from '@/components/OtpDialog';
 import { ApiError, isSessionExpired } from '@/lib/p3Api';
 import { p2Api } from '@/lib/p2Api';
+import { loadCachedQuote, saveCachedQuote } from '@/lib/p2QuoteCache';
 import { formatMoney } from '@/lib/format';
 
 function RateRow({ label, children, strong = false }) {
@@ -28,6 +29,14 @@ export default function ConfirmTransfer({ quoteId }) {
 
   useEffect(() => {
     if (!quoteId) return;
+    const cached = loadCachedQuote(quoteId);
+    if (cached?.beneficiary) {
+      const timer = setTimeout(() => {
+        setQuote(cached);
+        setLoading(false);
+      }, 0);
+      return () => clearTimeout(timer);
+    }
     const controller = new AbortController();
     p2Api.getQuote(quoteId, { signal: controller.signal }).then(
       ({ data }) => {
@@ -48,7 +57,14 @@ export default function ConfirmTransfer({ quoteId }) {
   }, [quoteId, router]);
 
   async function confirmTransfer({ challengeId, otpCode }) {
-    await p2Api.sendRemittance(quoteId, challengeId, otpCode);
+    const { data } = await p2Api.sendRemittance(quoteId, challengeId, otpCode);
+    saveCachedQuote({
+      ...quote,
+      ...data,
+      quoteId: quote.quoteId,
+      sent: true,
+      completedOn: new Date().toISOString(),
+    });
     setShowOtp(false);
     router.push(`/send/receipt?quoteId=${encodeURIComponent(quoteId)}`);
   }

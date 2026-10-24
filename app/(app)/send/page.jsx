@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { ApiError, isSessionExpired, p3Api } from '@/lib/p3Api';
 import { p2Api } from '@/lib/p2Api';
+import { saveCachedQuote } from '@/lib/p2QuoteCache';
 import { formatMoney } from '@/lib/format';
 
 const MINIMUM_SEND = 10;
@@ -21,18 +22,12 @@ export default function SendPage() {
 
   useEffect(() => {
     const controller = new AbortController();
-    Promise.all([
+    Promise.allSettled([
       p2Api.listBeneficiaries({ signal: controller.signal }),
       p3Api.getAccountSummary({ signal: controller.signal }),
-    ]).then(
-      ([beneficiaryResult, summaryResult]) => {
-        const active = (beneficiaryResult.data?.items ?? []).filter((item) => item.isActive);
-        setBeneficiaries(active);
-        setBalance(Number(summaryResult.data?.balance));
-        if (active.length === 1) setSelectedId(String(active[0].id));
-        setLoading(false);
-      },
-      (err) => {
+    ]).then(([beneficiaryResult, summaryResult]) => {
+      if (beneficiaryResult.status === 'rejected') {
+        const err = beneficiaryResult.reason;
         if (err?.name === 'AbortError') return;
         if (isSessionExpired(err)) {
           router.replace('/login?next=/send');
@@ -40,8 +35,22 @@ export default function SendPage() {
         }
         setError(err instanceof ApiError ? err.message : 'Could not load your transfer details.');
         setLoading(false);
-      },
-    );
+        return;
+      }
+
+      if (summaryResult.status === 'rejected' && isSessionExpired(summaryResult.reason)) {
+        router.replace('/login?next=/send');
+        return;
+      }
+
+      const active = (beneficiaryResult.value.data?.items ?? []).filter((item) => item.isActive);
+      setBeneficiaries(active);
+      if (summaryResult.status === 'fulfilled') {
+        setBalance(Number(summaryResult.value.data?.balance));
+      }
+      if (active.length === 1) setSelectedId(String(active[0].id));
+      setLoading(false);
+    });
     return () => controller.abort();
   }, [router]);
 
@@ -63,6 +72,14 @@ export default function SendPage() {
     setError('');
     try {
       const { data } = await p2Api.createQuote(Number(selectedId), numericAmount);
+      const beneficiary = beneficiaries.find((item) => String(item.id) === selectedId);
+      saveCachedQuote({
+        ...data,
+        amountSGD: numericAmount,
+        beneficiary,
+        sent: false,
+        status: data.status || 'QUOTED',
+      });
       router.push(`/send/confirm?quoteId=${encodeURIComponent(data.quoteId)}`);
     } catch (err) {
       if (isSessionExpired(err)) {

@@ -5,7 +5,7 @@
   "description": "RemitEase (IS444 Team 3) - Next.js frontend for the OutSystems backend",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
     "rabbitmq:up": "docker compose -f infra/rabbitmq/docker-compose.yml up -d",
