@@ -147,7 +147,7 @@ function OtpDialogBody({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 p-3 backdrop-blur-[3px] sm:items-center sm:p-4"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget && !busy) onClose?.();
       }}
@@ -156,11 +156,27 @@ function OtpDialogBody({
         role="dialog"
         aria-modal="true"
         aria-labelledby="otp-title"
-        className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl"
+        className="relative w-full max-w-sm overflow-hidden rounded-[1.75rem] border border-white/80 bg-white p-6 shadow-[0_28px_80px_-24px_rgba(15,23,42,0.55)] sm:p-7"
       >
-        <h2 id="otp-title" className="text-lg font-semibold text-slate-900">
-          {title}
-        </h2>
+        <div className="mx-auto mb-5 h-1.5 w-12 rounded-full bg-slate-200 sm:hidden" />
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={busy}
+          aria-label="Close confirmation"
+          className="absolute right-5 top-5 hidden h-9 w-9 place-items-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-40 sm:grid"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-5 w-5" aria-hidden="true">
+            <path strokeLinecap="round" d="m6 6 12 12M18 6 6 18" />
+          </svg>
+        </button>
+        <div className="grid h-12 w-12 place-items-center rounded-2xl bg-emerald-50 text-emerald-700">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 3 5.5 5.5v5.2c0 4.2 2.7 8 6.5 9.3 3.8-1.3 6.5-5.1 6.5-9.3V5.5L12 3Z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="m9.5 11.5 1.7 1.7 3.6-3.8" />
+          </svg>
+        </div>
+        <h2 id="otp-title" className="mt-4 text-xl font-semibold tracking-tight text-slate-950">{title}</h2>
         <p className="mt-1 text-sm text-slate-600">
           {status === 'requesting'
             ? 'Sending a code to your phone…'
@@ -182,7 +198,7 @@ function OtpDialogBody({
             autoComplete="one-time-code"
             placeholder={'•'.repeat(OTP_LENGTH)}
             disabled={status !== 'ready' || expired}
-            className="w-full rounded-xl border border-slate-300 px-4 py-3 text-center text-2xl tracking-[0.5em] text-slate-900 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/30 disabled:bg-slate-100"
+            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-center text-2xl tracking-[0.5em] text-slate-900 outline-none transition focus:border-emerald-600 focus:bg-white focus:ring-4 focus:ring-emerald-600/10 disabled:bg-slate-100"
           />
 
           {status === 'ready' && expiresIn !== null && (
@@ -200,7 +216,7 @@ function OtpDialogBody({
           <button
             type="submit"
             disabled={!canSubmit}
-            className="w-full rounded-xl bg-emerald-700 py-3 font-medium text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+            className="w-full rounded-2xl bg-gradient-to-r from-emerald-700 to-teal-700 py-3.5 font-semibold text-white shadow-lg shadow-emerald-900/10 transition hover:-translate-y-0.5 hover:shadow-xl disabled:translate-y-0 disabled:cursor-not-allowed disabled:bg-none disabled:bg-slate-300 disabled:shadow-none"
           >
             {status === 'submitting' ? 'Confirming…' : confirmLabel}
           </button>

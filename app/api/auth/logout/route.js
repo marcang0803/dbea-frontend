@@ -13,6 +13,7 @@ export async function POST() {
       method: 'POST',
       headers: authHeaders(token),
       cache: 'no-store',
+      signal: AbortSignal.timeout(5_000),
     }).catch(() => null);
   }
 

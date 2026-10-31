@@ -1,12 +1,12 @@
 'use client';
 
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { ApiError, isSessionExpired, p3Api } from '@/lib/p3Api';
 import { p2Api } from '@/lib/p2Api';
 import { saveCachedQuote } from '@/lib/p2QuoteCache';
 import { formatMoney } from '@/lib/format';
+import TransferStepHeader from '@/components/TransferStepHeader';
 
 const MINIMUM_SEND = 10;
 
@@ -92,22 +92,10 @@ export default function SendPage() {
   }
 
   return (
-    <main className="mx-auto max-w-md px-4 pb-10 pt-6">
-      <header className="flex items-center gap-3">
-        <Link
-          href="/home"
-          aria-label="Back to home"
-          className="grid h-10 w-10 place-items-center rounded-full border border-slate-200 bg-white text-xl text-slate-700 hover:bg-slate-50"
-        >
-          ←
-        </Link>
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wider text-emerald-700">Step 1 of 3</p>
-          <h1 className="text-xl font-semibold text-slate-900">Send money home</h1>
-        </div>
-      </header>
+    <main className="mx-auto max-w-md px-5 pb-12 pt-7">
+      <TransferStepHeader step={1} title="Send money home" backHref="/home" backLabel="Back to home" />
 
-      <form onSubmit={handleSubmit} className="mt-7 space-y-7">
+      <form onSubmit={handleSubmit} className="mt-9 space-y-8">
         <section>
           <div className="flex items-end justify-between">
             <div>
@@ -133,7 +121,7 @@ export default function SendPage() {
                 return (
                   <label
                     key={beneficiary.id}
-                    className={`flex cursor-pointer items-center gap-3 rounded-2xl border p-4 transition ${
+                    className={`flex cursor-pointer items-center gap-3 rounded-2xl border p-4 shadow-sm transition hover:-translate-y-0.5 ${
                       selected
                         ? 'border-emerald-600 bg-emerald-50 ring-1 ring-emerald-600'
                         : 'border-slate-200 bg-white hover:border-slate-300'
@@ -201,7 +189,7 @@ export default function SendPage() {
         <button
           type="submit"
           disabled={!canContinue}
-          className="w-full rounded-xl bg-emerald-700 py-3.5 font-semibold text-white transition hover:bg-emerald-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+          className="w-full rounded-2xl bg-gradient-to-r from-emerald-700 to-teal-700 py-4 font-semibold text-white shadow-lg shadow-emerald-900/15 transition hover:-translate-y-0.5 hover:shadow-xl disabled:translate-y-0 disabled:cursor-not-allowed disabled:bg-none disabled:bg-slate-300 disabled:shadow-none"
         >
           {submitting ? 'Getting your quote…' : 'Review quote'}
         </button>

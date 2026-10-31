@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import UnreadBadge from '@/components/UnreadBadge';
+import SignOutButton from '@/components/SignOutButton';
 import { ApiError, isSessionExpired, p3Api } from '@/lib/p3Api';
 import { formatDateTime, formatMoney } from '@/lib/format';
 
@@ -69,10 +70,19 @@ export default function HomePage() {
   const recent = summary?.recentRemittances ?? [];
 
   return (
-    <main className="mx-auto max-w-md px-4 pb-10 pt-6">
+    <main className="mx-auto max-w-md px-5 pb-12 pt-7">
       <header className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-slate-900">RemitEase</h1>
-        <UnreadBadge initialCount={summary?.unreadNotifications ?? 0} />
+        <div className="flex items-center gap-3">
+          <span className="grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-800 font-bold text-white shadow-md shadow-emerald-900/10">R</span>
+          <div>
+            <h1 className="font-semibold tracking-tight text-slate-950">RemitEase</h1>
+            <p className="text-xs text-slate-500">Your SGD wallet</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <UnreadBadge initialCount={summary?.unreadNotifications ?? 0} />
+          <SignOutButton />
+        </div>
       </header>
 
       {error && (
@@ -85,12 +95,14 @@ export default function HomePage() {
       )}
 
       {/* Balance card */}
-      <section className="mt-6 rounded-2xl bg-emerald-700 p-6 text-white shadow-sm">
-        <p className="text-sm text-emerald-100">Available balance</p>
+      <section className="relative mt-7 overflow-hidden rounded-[1.75rem] bg-gradient-to-br from-emerald-700 via-emerald-700 to-teal-900 p-6 text-white shadow-[0_20px_45px_-22px_rgba(4,120,87,0.75)]">
+        <div className="pointer-events-none absolute -right-12 -top-16 h-44 w-44 rounded-full border border-white/10 bg-white/5" />
+        <div className="pointer-events-none absolute -bottom-20 -right-2 h-40 w-40 rounded-full border border-white/10" />
+        <p className="relative text-sm font-medium text-emerald-100">Available balance</p>
         {loading && !summary ? (
           <div className="mt-2 h-9 w-40 animate-pulse rounded bg-emerald-600" />
         ) : (
-          <p className="mt-1 text-3xl font-semibold tabular-nums">
+          <p className="relative mt-1 text-4xl font-semibold tracking-tight tabular-nums">
             {summary ? formatMoney(summary.balance, summary.currency) : '—'}
           </p>
         )}
@@ -99,21 +111,24 @@ export default function HomePage() {
         )}
         <Link
           href="/send"
-          className="mt-5 inline-flex w-full items-center justify-center rounded-xl bg-white py-3 font-medium text-emerald-800 hover:bg-emerald-50"
+          className="relative mt-7 inline-flex w-full items-center justify-center rounded-2xl bg-white py-3.5 font-semibold text-emerald-800 shadow-sm transition hover:-translate-y-0.5 hover:bg-emerald-50 hover:shadow-md focus-visible:ring-4 focus-visible:ring-white/30"
         >
           Send money home
         </Link>
       </section>
 
       {warnings.length > 0 && (
-        <p className="mt-4 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        <p className="mt-5 rounded-2xl border border-amber-200/70 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
           Some details couldn&apos;t be loaded right now. Your balance is up to date.
         </p>
       )}
 
       {/* Recent sends */}
-      <section className="mt-8">
-        <h2 className="text-base font-semibold text-slate-900">Recent sends</h2>
+      <section className="mt-9">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold tracking-tight text-slate-950">Recent sends</h2>
+          {recent.length > 0 && <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-500">Latest {recent.length}</span>}
+        </div>
 
         {loading && !summary ? (
           <ul className="mt-3 space-y-2" aria-hidden="true">

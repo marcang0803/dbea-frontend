@@ -85,18 +85,18 @@ export default function TransferReceipt({ quoteId }) {
   const underReview = receipt.status === 'FEE_REVIEW';
 
   return (
-    <main className="mx-auto max-w-md px-4 pb-10 pt-8">
+    <main className="mx-auto max-w-md px-5 pb-12 pt-10">
       <header className="text-center">
         <div
-          className={`mx-auto grid h-20 w-20 place-items-center rounded-full text-4xl ${
-            underReview ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
+          className={`mx-auto grid h-20 w-20 place-items-center rounded-full border-8 border-white text-4xl shadow-xl ${
+            underReview ? 'bg-amber-100 text-amber-700' : 'bg-gradient-to-br from-emerald-100 to-teal-100 text-emerald-700'
           }`}
           aria-hidden="true"
         >
           {underReview ? '!' : '✓'}
         </div>
         <p className="mt-5 text-xs font-medium uppercase tracking-wider text-emerald-700">Step 3 of 3</p>
-        <h1 className="mt-1 text-2xl font-semibold text-slate-900">
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
           {underReview ? 'Transfer is being reviewed' : 'Money sent successfully'}
         </h1>
         <p className="mt-2 text-sm text-slate-500">
@@ -109,7 +109,7 @@ export default function TransferReceipt({ quoteId }) {
         </p>
       </header>
 
-      <section className="mt-7 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <section className="mt-8 overflow-hidden rounded-[1.75rem] border border-slate-200/80 bg-white shadow-[0_18px_45px_-30px_rgba(15,23,42,0.5)]">
         <div className="border-b border-slate-100 px-5 py-5">
           <p className="text-sm text-slate-500">Receipt number</p>
           <p className="mt-1 font-mono text-sm font-medium text-slate-900">REMIT-{receipt.quoteId}</p>
@@ -133,13 +133,13 @@ export default function TransferReceipt({ quoteId }) {
       <div className="mt-6 grid gap-3">
         <Link
           href="/home"
-          className="inline-flex w-full items-center justify-center rounded-xl bg-emerald-700 py-3.5 font-semibold text-white transition hover:bg-emerald-800"
+          className="inline-flex w-full items-center justify-center rounded-2xl bg-gradient-to-r from-emerald-700 to-teal-700 py-4 font-semibold text-white shadow-lg shadow-emerald-900/15 transition hover:-translate-y-0.5 hover:shadow-xl"
         >
           Return home
         </Link>
         <Link
           href="/send"
-          className="inline-flex w-full items-center justify-center rounded-xl border border-slate-300 bg-white py-3.5 font-semibold text-slate-700 transition hover:bg-slate-50"
+          className="inline-flex w-full items-center justify-center rounded-2xl border border-slate-200 bg-white py-4 font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow"
         >
           Send again
         </Link>

@@ -20,6 +20,7 @@ export async function POST(request) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ Username: username, Password: password }),
       cache: 'no-store',
+      signal: AbortSignal.timeout(15000),
     });
   } catch {
     return NextResponse.json(

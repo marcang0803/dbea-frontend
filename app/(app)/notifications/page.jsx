@@ -81,12 +81,15 @@ export default function NotificationsPage() {
   const hasMore = items.length < total;
 
   return (
-    <main className="mx-auto max-w-md px-4 pb-10 pt-6">
+    <main className="mx-auto max-w-md px-5 pb-12 pt-7">
       <header className="flex items-center gap-3">
-        <Link href="/home" className="rounded-full p-2 text-slate-600 hover:bg-slate-100" aria-label="Back to home">
+        <Link href="/home" className="grid h-11 w-11 place-items-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:-translate-y-0.5 hover:shadow" aria-label="Back to home">
           ←
         </Link>
-        <h1 className="text-xl font-semibold text-slate-900">Notifications</h1>
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-700">Updates</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Notifications</h1>
+        </div>
       </header>
 
       {error && (
@@ -105,7 +108,7 @@ export default function NotificationsPage() {
       )}
 
       {items.length > 0 && (
-        <ul className="mt-6 divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white">
+        <ul className="mt-7 divide-y divide-slate-100 overflow-hidden rounded-[1.75rem] border border-slate-200/80 bg-white shadow-[0_18px_45px_-35px_rgba(15,23,42,0.5)]">
           {items.map((n) => (
             <li key={n.id}>
               <button

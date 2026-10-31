@@ -8,6 +8,7 @@ import { ApiError, isSessionExpired } from '@/lib/p3Api';
 import { p2Api } from '@/lib/p2Api';
 import { loadCachedQuote, saveCachedQuote } from '@/lib/p2QuoteCache';
 import { formatMoney } from '@/lib/format';
+import TransferStepHeader from '@/components/TransferStepHeader';
 
 function RateRow({ label, children, strong = false }) {
   return (
@@ -91,23 +92,12 @@ export default function ConfirmTransfer({ quoteId }) {
   }
 
   return (
-    <main className="mx-auto max-w-md px-4 pb-10 pt-6">
-      <header className="flex items-center gap-3">
-        <Link
-          href="/send"
-          aria-label="Back to transfer details"
-          className="grid h-10 w-10 place-items-center rounded-full border border-slate-200 bg-white text-xl text-slate-700 hover:bg-slate-50"
-        >
-          ←
-        </Link>
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wider text-emerald-700">Step 2 of 3</p>
-          <h1 className="text-xl font-semibold text-slate-900">Review your quote</h1>
-        </div>
-      </header>
+    <main className="mx-auto max-w-md px-5 pb-12 pt-7">
+      <TransferStepHeader step={2} title="Review your quote" backHref="/send" backLabel="Back to transfer details" />
 
-      <section className="mt-7 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="bg-emerald-700 px-5 py-6 text-white">
+      <section className="mt-9 overflow-hidden rounded-[1.75rem] border border-slate-200/80 bg-white shadow-[0_18px_45px_-30px_rgba(15,23,42,0.5)]">
+        <div className="relative overflow-hidden bg-gradient-to-br from-emerald-700 to-teal-900 px-6 py-7 text-white">
+          <div className="pointer-events-none absolute -right-10 -top-16 h-40 w-40 rounded-full border border-white/10 bg-white/5" />
           <p className="text-sm text-emerald-100">{quote.beneficiary.nickname} receives</p>
           <p className="mt-1 text-3xl font-semibold tabular-nums">
             {formatMoney(quote.recipientAmount, quote.beneficiary.payoutCurrency)}
@@ -139,7 +129,7 @@ export default function ConfirmTransfer({ quoteId }) {
       <button
         type="button"
         onClick={() => setShowOtp(true)}
-        className="mt-6 w-full rounded-xl bg-emerald-700 py-3.5 font-semibold text-white transition hover:bg-emerald-800"
+        className="mt-6 w-full rounded-2xl bg-gradient-to-r from-emerald-700 to-teal-700 py-4 font-semibold text-white shadow-lg shadow-emerald-900/15 transition hover:-translate-y-0.5 hover:shadow-xl focus-visible:ring-4 focus-visible:ring-emerald-600/20"
       >
         Confirm and send
       </button>
