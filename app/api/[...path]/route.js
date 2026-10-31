@@ -11,8 +11,20 @@ import {
 function routeFor(method, path) {
   const joined = path.join('/');
 
-  if (method === 'GET' && joined === 'beneficiaries') {
-    return '/T3RE_Sender_AS/rest/Beneficiary/beneficiaries';
+  if (['GET', 'POST'].includes(method) && joined === 'family/beneficiaries') {
+    return '/T3RE_Sender_CS/rest/Family/beneficiaries';
+  }
+  if (method === 'DELETE' && /^family\/beneficiaries\/[^/]+$/.test(joined)) {
+    return `/T3RE_Sender_CS/rest/Family/beneficiaries/${path.at(-1)}`;
+  }
+  if (method === 'GET' && joined === 'family/payout-options') {
+    return '/T3RE_Sender_CS/rest/Family/payout-options';
+  }
+  if (method === 'POST' && joined === 'onboard/otp') {
+    return '/T3RE_Sender_CS/rest/Onboard/otp';
+  }
+  if (method === 'POST' && joined === 'onboard/senders') {
+    return '/T3RE_Sender_CS/rest/Onboard/senders';
   }
   if (method === 'GET' && joined === 'account/summary') {
     return '/T3RE_Notify_CS/rest/Account/summary';
@@ -63,13 +75,9 @@ function backendBody(method, path, body) {
   return body;
 }
 
-async function authenticatedUserId(token) {
-  const response = await fetch(outSystemsUrl('/T3RE_Core_AuthAPI/rest/Auth/me'), {
-    headers: authHeaders(token),
-    cache: 'no-store',
-  });
-  const payload = await readJson(response);
-  return response.ok && payload?.Success ? payload.UserId : null;
+function isPublicRoute(method, path) {
+  const joined = path.join('/');
+  return method === 'POST' && ['onboard/otp', 'onboard/senders'].includes(joined);
 }
 
 async function handle(request, context) {
@@ -83,7 +91,7 @@ async function handle(request, context) {
   }
 
   const token = await getSessionToken();
-  if (!token) {
+  if (!token && !isPublicRoute(request.method, path)) {
     return NextResponse.json(
       { success: false, data: null, errors: [{ code: 'UNAUTHORIZED', message: 'Authentication required.' }] },
       { status: 401 },
@@ -93,16 +101,6 @@ async function handle(request, context) {
   const incomingUrl = new URL(request.url);
   const targetUrl = new URL(outSystemsUrl(targetPath));
   targetUrl.search = incomingUrl.search;
-  if (request.method === 'GET' && path.join('/') === 'beneficiaries') {
-    const userId = await authenticatedUserId(token).catch(() => null);
-    if (!userId) {
-      return NextResponse.json(
-        { success: false, data: null, errors: [{ code: 'UNAUTHORIZED', message: 'Your session has expired.' }] },
-        { status: 401 },
-      );
-    }
-    targetUrl.searchParams.set('userId', String(userId));
-  }
 
   let body;
   if (!['GET', 'HEAD'].includes(request.method)) {
@@ -115,7 +113,7 @@ async function handle(request, context) {
     backend = await fetch(targetUrl, {
       method: request.method,
       headers: {
-        ...authHeaders(token),
+        ...(token ? authHeaders(token) : {}),
         ...(body ? { 'Content-Type': 'application/json' } : {}),
       },
       body,
@@ -129,12 +127,14 @@ async function handle(request, context) {
   }
 
   const payload = await readJson(backend);
-  if (backend.ok && request.method === 'GET' && path.join('/') === 'beneficiaries') {
+  if (backend.ok && request.method === 'GET' && path.join('/') === 'family/beneficiaries') {
     const normalized = camelize(payload);
     const beneficiaries = Array.isArray(normalized?.data) ? normalized.data : [];
     const items = beneficiaries.map((beneficiary) => ({
       ...beneficiary,
       id: beneficiary.beneficiaryLinkId,
+      isActive: true,
+      relationshipLabel: beneficiary.relationshipLabel || beneficiary.relationship,
       accountLast4: String(beneficiary.accountId || '').slice(-4),
       bankName: beneficiary.bankName || 'Recipient bank',
       payoutCurrency: beneficiary.payoutCurrency || 'PHP',
@@ -147,3 +147,4 @@ async function handle(request, context) {
 export const GET = handle;
 export const POST = handle;
 export const PUT = handle;
+export const DELETE = handle;

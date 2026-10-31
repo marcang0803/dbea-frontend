@@ -7,7 +7,7 @@
 //   PUT  /api/mock/notifications/{id}/read      → A4 mark read
 //   GET  /api/mock/notifications/unread-count   → A4 unread count
 //   POST /api/mock/otp/challenges               → C13 RequestOTP
-//   GET  /api/mock/beneficiaries                → P1 active beneficiary links
+//   GET  /api/mock/family/beneficiaries         → P1 active beneficiary links
 //   POST /api/mock/remittance/quotes            → P2 QuoteRemittance
 //   GET  /api/mock/remittance/quotes/{id}       → P2 quote review
 //   POST /api/mock/remittance/{id}/send         → P2 ProcessRemittance
@@ -44,7 +44,7 @@ async function handle(request, { params }) {
   }
 
   // P1 beneficiary list used by P2's send screen.
-  if (route === 'GET beneficiaries') {
+  if (route === 'GET family/beneficiaries') {
     return ok({ items: store.beneficiaries });
   }
 
