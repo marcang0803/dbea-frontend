@@ -117,6 +117,18 @@ export default function HomePage() {
         </Link>
       </section>
 
+      {/* My family (P1) */}
+      <Link
+        href="/family"
+        className="mt-4 flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3.5 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300"
+      >
+        <span>
+          <span className="block font-medium text-slate-900">My family</span>
+          <span className="block text-sm text-slate-500">Add or remove the people you send to</span>
+        </span>
+        <span aria-hidden="true" className="text-slate-400">→</span>
+      </Link>
+
       {warnings.length > 0 && (
         <p className="mt-5 rounded-2xl border border-amber-200/70 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
           Some details couldn&apos;t be loaded right now. Your balance is up to date.

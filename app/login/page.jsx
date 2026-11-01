@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
@@ -89,6 +90,12 @@ function LoginForm() {
           </button>
           <p className="text-center text-xs leading-5 text-slate-400">Your sign-in is protected and your banking credentials are never stored in this browser.</p>
         </form>
+        <p className="mt-6 text-center text-sm text-slate-600">
+          New to RemitEase?{' '}
+          <Link href="/signup" className="font-semibold text-emerald-700 hover:text-emerald-800">
+            Create an account
+          </Link>
+        </p>
       </section>
     </main>
   );
