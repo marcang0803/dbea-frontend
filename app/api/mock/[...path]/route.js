@@ -162,10 +162,10 @@ async function handle(request, { params }) {
 
   // A4 Notification
   if (route === 'GET notifications') {
-    const page = Math.max(1, Number(url.searchParams.get('page')) || 1);
+    const page = Math.max(0, Number(url.searchParams.get('page')) || 0);
     const pageSize = Math.min(50, Math.max(1, Number(url.searchParams.get('pageSize')) || 20));
     const sorted = [...store.notifications].sort((a, b) => b.createdOn.localeCompare(a.createdOn));
-    return ok({ items: sorted.slice((page - 1) * pageSize, page * pageSize), total: sorted.length });
+    return ok({ itemsList: sorted.slice(page * pageSize, (page + 1) * pageSize), total: sorted.length });
   }
   if (route === 'GET notifications/unread-count') return ok({ unread: unread() });
   if (request.method === 'PUT' && path[0] === 'notifications' && path[2] === 'read' && path.length === 3) {

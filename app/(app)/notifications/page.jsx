@@ -23,7 +23,7 @@ export default function NotificationsPage() {
   const router = useRouter();
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -32,8 +32,8 @@ export default function NotificationsPage() {
     (pageToLoad, signal) =>
       p3Api.listNotifications(pageToLoad, PAGE_SIZE, { signal }).then(
         ({ data }) => {
-          const newItems = data?.items ?? [];
-          setItems((prev) => (pageToLoad === 1 ? newItems : [...prev, ...newItems]));
+          const newItems = data?.itemsList ?? [];
+          setItems((prev) => (pageToLoad === 0 ? newItems : [...prev, ...newItems]));
           setTotal(Number(data?.total) || 0);
           setPage(pageToLoad);
           setError('');
@@ -54,7 +54,7 @@ export default function NotificationsPage() {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetchPage(1, controller.signal);
+    fetchPage(0, controller.signal);
     return () => controller.abort();
   }, [fetchPage]);
 
@@ -95,7 +95,7 @@ export default function NotificationsPage() {
       {error && (
         <div role="alert" className="mt-6 rounded-2xl bg-red-50 p-4 text-sm text-red-700">
           <p>{error}</p>
-          <button onClick={() => loadPage(items.length ? page + 1 : 1)} className="mt-2 font-medium underline">
+          <button onClick={() => loadPage(items.length ? page + 1 : 0)} className="mt-2 font-medium underline">
             Try again
           </button>
         </div>
