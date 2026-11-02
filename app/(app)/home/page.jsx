@@ -135,6 +135,121 @@ export default function HomePage() {
         </p>
       )}
 
+      {/* P4 rate-lock actions */}
+      <section className="mt-9">
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold tracking-tight text-slate-950">
+              Exchange rates
+            </h2>
+
+            <p className="mt-1 text-sm text-slate-500">
+              Protect a future transfer or monitor a target rate.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3">
+          <Link
+            href="/rates/lock"
+            className="group flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md"
+          >
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-emerald-100 text-emerald-700">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                className="h-6 w-6"
+                aria-hidden="true"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M7 10V7a5 5 0 0 1 10 0v3M6 10h12v10H6V10Z"
+                />
+              </svg>
+            </span>
+
+            <span className="min-w-0 flex-1">
+              <span className="block font-semibold text-slate-900">
+                Lock an exchange rate
+              </span>
+
+              <span className="mt-1 block text-sm text-slate-500">
+                Preview and secure a forward rate.
+              </span>
+            </span>
+
+            <span className="text-xl text-slate-300 transition group-hover:translate-x-1 group-hover:text-emerald-600">
+              →
+            </span>
+          </Link>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Link
+              href="/rates/locks"
+              className="group rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md"
+            >
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-teal-100 text-teal-700">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  className="h-5 w-5"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M6 5h12M6 12h12M6 19h8"
+                  />
+                </svg>
+              </span>
+
+              <span className="mt-3 block font-semibold text-slate-900">
+                My rate locks
+              </span>
+
+              <span className="mt-1 block text-sm text-slate-500">
+                View active and previous locks.
+              </span>
+            </Link>
+
+            <Link
+              href="/rates/alerts"
+              className="group rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md"
+            >
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-amber-100 text-amber-700">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  className="h-5 w-5"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4"
+                  />
+                </svg>
+              </span>
+
+              <span className="mt-3 block font-semibold text-slate-900">
+                Rate alerts
+              </span>
+
+              <span className="mt-1 block text-sm text-slate-500">
+                Create and manage target rates.
+              </span>
+            </Link>
+          </div>
+        </div>
+      </section>
+
       {/* Recent sends */}
       <section className="mt-9">
         <div className="flex items-center justify-between">
