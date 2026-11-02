@@ -136,7 +136,7 @@ async function handle(request, context) {
       isActive: true,
       relationshipLabel: beneficiary.relationshipLabel || beneficiary.relationship,
       accountLast4: String(beneficiary.accountId || '').slice(-4),
-      bankName: beneficiary.bankName || 'Recipient bank',
+      bankName: beneficiary.partnerName || beneficiary.bankName || 'Recipient bank',
       payoutCurrency: beneficiary.payoutCurrency || 'PHP',
     }));
     return NextResponse.json({ success: true, data: { items, total: items.length }, errors: [] });
