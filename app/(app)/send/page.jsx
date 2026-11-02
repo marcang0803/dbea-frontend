@@ -145,10 +145,12 @@ export default function SendPage() {
                     <span className="min-w-0 flex-1">
                       <span className="block font-medium text-slate-900">{beneficiary.nickname}</span>
                       <span className="block truncate text-sm text-slate-500">
-                        {beneficiary.relationshipLabel} · {beneficiary.bankName} •••{beneficiary.accountLast4}
+                        {beneficiary.relationshipLabel} · Account •••{beneficiary.accountLast4}
                       </span>
                     </span>
-                    <span className="text-xs font-medium text-slate-500">{beneficiary.payoutCurrency}</span>
+                    <span className="whitespace-nowrap text-xs font-medium text-slate-500">
+                      {beneficiary.bankName} · {beneficiary.payoutCurrency}
+                    </span>
                   </label>
                 );
               })}
