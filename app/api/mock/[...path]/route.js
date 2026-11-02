@@ -11,6 +11,12 @@
 //   POST /api/mock/remittance/quotes            → P2 QuoteRemittance
 //   GET  /api/mock/remittance/quotes/{id}       → P2 quote review
 //   POST /api/mock/remittance/{id}/send         → P2 ProcessRemittance
+//   POST /api/mock/rates/locks/preview           → P4 PreviewLock
+//   GET  /api/mock/rates/locks                   → P4 GetMyLocks
+//   POST /api/mock/rates/locks                   → P4 CreateLock
+//   GET  /api/mock/rates/alerts                  → P4 GetMyAlerts
+//   POST /api/mock/rates/alerts                  → P4 CreateAlert
+//   DELETE /api/mock/rates/alerts/{id}           → P4 DeleteAlert
 //   POST /api/mock/dev/confirm                  → stands in for P2/P4/P6 composites that verify the OTP
 //   POST /api/mock/dev/notify                   → adds a test notification (see /dev)
 
@@ -26,6 +32,15 @@ const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 const unread = () => store.notifications.filter((n) => !n.isRead).length;
 const formatMockAmount = (value) =>
   Number(value).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const lockPeriods = new Set(['1M', '3M', '6M', '1Y']);
+const mockForwardRates = { '1M': 43.9, '3M': 43.75, '6M': 43.55, '1Y': 43.2 };
+
+function maturityDateFor(period) {
+  const months = { '1M': 1, '3M': 3, '6M': 6, '1Y': 12 }[period];
+  const maturityDate = new Date();
+  maturityDate.setUTCMonth(maturityDate.getUTCMonth() + months);
+  return maturityDate.toISOString();
+}
 
 async function handle(request, { params }) {
   if (!enabled()) return fail(404, 'NOT_FOUND', 'Mock API is disabled.');
@@ -160,6 +175,149 @@ async function handle(request, { params }) {
     });
   }
 
+  // P4 PreviewLock. The mock rate is deterministic for each supported period.
+  if (route === 'POST rates/locks/preview') {
+    const body = await request.json().catch(() => ({}));
+    const beneficiary = store.beneficiaries.find(
+      (item) => item.id === Number(body.beneficiaryLinkId) && item.isActive,
+    );
+    const amountSGD = Number(body.amountSGD);
+    const period = String(body.period || '').toUpperCase();
+
+    if (!beneficiary) {
+      return fail(400, 'INVALID_BENEFICIARY', 'Select an active beneficiary.');
+    }
+    if (!Number.isFinite(amountSGD) || amountSGD <= 0) {
+      return fail(400, 'INVALID_AMOUNT', 'Enter an amount greater than S$0.');
+    }
+    if (!lockPeriods.has(period)) {
+      return fail(400, 'INVALID_PERIOD', 'Period must be 1M, 3M, 6M or 1Y.');
+    }
+
+    const forwardRate = mockForwardRates[period];
+    return ok({
+      forwardRate,
+      recipientAmount: Number((amountSGD * forwardRate).toFixed(2)),
+      maturityDate: maturityDateFor(period),
+    });
+  }
+
+  // P4 GetMyLocks
+  if (route === 'GET rates/locks') {
+    return ok([...store.rateLocks].sort((a, b) => b.createdOn.localeCompare(a.createdOn)));
+  }
+
+  // P4 CreateLock. This also verifies the LOCK OTP using the same referenceId.
+  if (route === 'POST rates/locks') {
+    const body = await request.json().catch(() => ({}));
+    const beneficiary = store.beneficiaries.find(
+      (item) => item.id === Number(body.beneficiaryLinkId) && item.isActive,
+    );
+    const amountSGD = Number(body.amountSGD);
+    const period = String(body.period || '').toUpperCase();
+    const referenceId = String(body.referenceId || '');
+
+    if (!beneficiary || !Number.isFinite(amountSGD) || amountSGD <= 0 || !lockPeriods.has(period)) {
+      return fail(400, 'INVALID_REQUEST', 'Beneficiary, amount and period are required.');
+    }
+    if (!body.challengeId || !body.otpCode || !referenceId) {
+      return fail(400, 'INVALID_REQUEST', 'Challenge ID, OTP code and reference ID are required.');
+    }
+
+    const challenge = store.challenges.get(body.challengeId);
+    const sameReference = String(challenge?.referenceId) === referenceId;
+    const invalidChallenge =
+      !challenge ||
+      challenge.used ||
+      challenge.purpose !== 'LOCK' ||
+      !sameReference ||
+      Date.now() > Date.parse(challenge.expiresAt) ||
+      challenge.attempts >= MOCK_OTP.MAX_ATTEMPTS;
+
+    if (invalidChallenge || body.otpCode === MOCK_OTP.FORCE_EXPIRED_CODE) {
+      return fail(409, 'OTP_INVALID', 'This code has expired or can no longer be used.');
+    }
+
+    challenge.attempts += 1;
+    if (body.otpCode !== MOCK_OTP.CORRECT_CODE) {
+      const attemptsLeft = MOCK_OTP.MAX_ATTEMPTS - challenge.attempts;
+      if (attemptsLeft <= 0) {
+        return fail(409, 'OTP_INVALID', 'This code can no longer be used.');
+      }
+      return fail(422, 'OTP_INCORRECT', `Incorrect code. ${attemptsLeft} tries left.`);
+    }
+
+    challenge.used = true;
+    const lockId = store.nextRateLockId++;
+    const lockedRate = mockForwardRates[period];
+    const createdOn = new Date().toISOString();
+    const lock = {
+      lockId,
+      beneficiaryLinkId: beneficiary.id,
+      fxForwardId: 9000 + lockId,
+      lockedRate,
+      amountSGD,
+      period,
+      maturityDate: maturityDateFor(period),
+      status: 'ACTIVE',
+      createdOn,
+    };
+
+    store.rateLocks.unshift(lock);
+    store.notifications.unshift({
+      id: store.nextNotificationId++,
+      type: 'LOCK',
+      title: 'Rate locked',
+      message: `S$${formatMockAmount(amountSGD)} locked at ${lockedRate.toFixed(2)} PHP.`,
+      link: '/rates/locks',
+      isRead: false,
+      createdOn,
+    });
+
+    return ok(lock, 201);
+  }
+
+  // P4 GetMyAlerts
+  if (route === 'GET rates/alerts') {
+    return ok([...store.rateAlerts].sort((a, b) => b.createdOn.localeCompare(a.createdOn)));
+  }
+
+  // P4 CreateAlert
+  if (route === 'POST rates/alerts') {
+    const body = await request.json().catch(() => ({}));
+    const corridor = String(body.corridor || '').trim().toUpperCase();
+    const targetRate = Number(body.targetRate);
+
+    if (!corridor || !Number.isFinite(targetRate) || targetRate <= 0) {
+      return fail(400, 'INVALID_REQUEST', 'Corridor and a positive target rate are required.');
+    }
+
+    const alert = {
+      alertId: store.nextRateAlertId++,
+      userId: 51085,
+      corridor,
+      targetRate,
+      isActive: true,
+      lastTriggeredAt: null,
+      createdOn: new Date().toISOString(),
+    };
+    store.rateAlerts.unshift(alert);
+    return ok(alert, 201);
+  }
+
+  // P4 DeleteAlert
+  if (
+    request.method === 'DELETE' &&
+    path[0] === 'rates' &&
+    path[1] === 'alerts' &&
+    path.length === 3
+  ) {
+    const index = store.rateAlerts.findIndex((item) => String(item.alertId) === path[2]);
+    if (index < 0) return fail(404, 'ALERT_NOT_FOUND', 'Rate alert not found.');
+    const [deleted] = store.rateAlerts.splice(index, 1);
+    return ok({ alertId: deleted.alertId, deleted: true });
+  }
+
   // A4 Notification
   if (route === 'GET notifications') {
     const page = Math.max(0, Number(url.searchParams.get('page')) || 0);
@@ -228,3 +386,4 @@ async function handle(request, { params }) {
 export const GET = handle;
 export const POST = handle;
 export const PUT = handle;
+export const DELETE = handle;

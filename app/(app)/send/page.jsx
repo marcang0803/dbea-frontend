@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { ApiError, isSessionExpired, p3Api } from '@/lib/p3Api';
@@ -113,6 +114,9 @@ export default function SendPage() {
           ) : beneficiaries.length === 0 ? (
             <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
               No active beneficiaries are available. Add or activate one before sending money.
+              <Link href="/family/new" className="mt-2 block font-semibold text-amber-900 underline">
+                Add a family member
+              </Link>
             </div>
           ) : (
             <div className="mt-3 grid gap-2">
