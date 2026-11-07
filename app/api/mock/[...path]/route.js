@@ -49,6 +49,98 @@ async function handle(request, { params }) {
   const url = new URL(request.url);
   await delay(350); // makes loading states visible
 
+  if (route === 'GET auth/me') {
+    return ok({ userId: store.userId });
+  }
+
+  if (route === 'POST score') {
+    const userId = Number(url.searchParams.get('UserId'));
+    const accountId = url.searchParams.get('tBankAccountId');
+    if (userId !== store.userId || accountId !== store.account.accountId) {
+      return fail(400, 'INVALID_ACCOUNT', 'The user or account could not be verified.');
+    }
+
+    const snapshot = {
+      id: store.nextScoreSnapshotId++,
+      userId,
+      score: 724,
+      band: 'B',
+      factorBreakdown: [
+        { factor: 'Income stability', reason: 'Regular income history supports repayment capacity.' },
+        { factor: 'Account activity', reason: 'Recent account activity is within the expected range.' },
+        { factor: 'Existing obligations', reason: 'Current obligations are included in the assessment.' },
+      ],
+      createdOn: new Date().toISOString(),
+    };
+    store.scoreSnapshots.set(snapshot.id, snapshot);
+    return ok(snapshot);
+  }
+
+  if (route === 'GET advances/me') {
+    return ok({ userIdOut: store.userId, latestScore: 724, latestBand: 'B' });
+  }
+
+  if (route === 'GET eligibility') {
+    const userId = Number(url.searchParams.get('UserId'));
+    const accountId = url.searchParams.get('tBankAccountId');
+    const amount = Number(url.searchParams.get('RequestedAmount'));
+    const tenor = Number(url.searchParams.get('SelectedTenorMonths'));
+    const snapshotId = Number(url.searchParams.get('SnapshotId'));
+    const snapshot = store.scoreSnapshots.get(snapshotId);
+
+    if (userId !== store.userId || accountId !== store.account.accountId || !snapshot) {
+      return fail(400, 'INVALID_SNAPSHOT', 'A valid score snapshot and account are required.');
+    }
+    if (!Number.isFinite(amount) || amount <= 0 || ![3, 6, 12].includes(tenor)) {
+      return fail(400, 'INVALID_PLAN', 'Enter a positive amount and choose a supported plan term.');
+    }
+
+    const interestRate = 8;
+    const interest = Number((amount * interestRate * tenor / 1200).toFixed(2));
+    const monthlyInstalment = Number(((amount + interest) / tenor).toFixed(2));
+    const maturityDate = new Date();
+    maturityDate.setUTCMonth(maturityDate.getUTCMonth() + tenor);
+    return ok({
+      isEligible: amount <= 1500,
+      score: snapshot.score,
+      approvedBand: snapshot.band,
+      maxAdvanceAmount: 1500,
+      outSnapshotId: snapshot.id,
+      isSnapshotValid: true,
+      selectedPlanAmount: amount,
+      selectedTenor: tenor,
+      monthlyInstalment,
+      maturityDate: maturityDate.toISOString(),
+      bandProductId: 'BAND-B',
+      tBankLoanProductId: 3201,
+      interestRate,
+      interest,
+    });
+  }
+
+  if (route === 'GET advances') {
+    const userId = Number(url.searchParams.get('userId'));
+    const status = url.searchParams.get('status');
+    const items = store.advances.filter(
+      (advance) =>
+        advance.userId === userId &&
+        (!status || advance.status.toUpperCase() === status.toUpperCase()),
+    );
+    return ok(items);
+  }
+
+  if (
+    request.method === 'GET' &&
+    path[0] === 'advances' &&
+    path.length === 3 &&
+    path[2] === 'repayments'
+  ) {
+    const advanceId = Number(path[1]);
+    const advanceExists = store.advances.some((advance) => advance.advanceId === advanceId);
+    if (!advanceExists) return fail(404, 'ADVANCE_NOT_FOUND', 'Advance record not found.');
+    return ok(store.repayments.filter((repayment) => repayment.advanceId === advanceId));
+  }
+
   // C5 ViewAccountSummary
   if (route === 'GET account/summary') {
     return ok({

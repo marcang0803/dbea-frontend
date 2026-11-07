@@ -53,6 +53,19 @@ function routeFor(method, path) {
     return '/T3RE_Notify_CS/rest/Otp/challenges';
   }
 
+  // P5: score, eligibility and user-facing My Advance data
+  if (method === 'GET' && joined === 'advances/me') {
+    return '/T3RE_Score_CS/rest/ScoreCS/advances/me';
+  }
+
+  if (method === 'GET' && joined === 'eligibility') {
+    return '/T3RE_Score_CS/rest/ScoreCS/eligibility';
+  }
+
+  if (method === 'POST' && joined === 'score') {
+    return '/T3RE_Score_AS/rest/Score/score';
+  }
+
   // Remittance
   if (method === 'POST' && joined === 'remittance/quotes') {
     return '/T3RE_Remit_CS/rest/Quote/quotes';
@@ -201,7 +214,7 @@ async function handle(request, context) {
 
   let body;
 
-  if (!['GET', 'HEAD'].includes(request.method)) {
+  if (!['GET', 'HEAD'].includes(request.method) && request.body) {
     const incomingBody = await request.json().catch(() => null);
 
     body = JSON.stringify(

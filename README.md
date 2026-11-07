@@ -26,10 +26,16 @@ works without OutSystems, using sample data from `lib/mock/mockStore.js`.
 |---|---|
 | `/home` | Balance, last 5 sends, unread bell |
 | `/notifications` | Inbox. Tap an item to mark it read and follow its link. |
+| `/advance/offer` | P5 score, score factors, and eligibility for 3/6/12-month plans |
+| `/advance/me` | P5 advance records, repayment history, and projected future instalments |
 | `/dev` | P3 dev page: open the **OTP dialog** (code `123456` = correct, other digits = wrong, `000000` = expired) and **add a test notification** to see the bell update |
 
 Mock data lives in memory. Restart `npm run dev` to reset it.
 Links to screens other members haven't built yet (e.g. `/send`, `/rates/lock`) show a 404 for now. That's expected.
+
+P5 uses the mock API in local development by default. The offer page scores the mock user and checks a sample S$500 against 3-, 6-, and 12-month terms. The advance schedule uses a seeded example; upcoming monthly rows are projected from the advance's next due date because the backend repayment-history endpoint does not return future schedule rows.
+
+For the real P5 services, set `NEXT_PUBLIC_USE_MOCK_API=false` in `.env.development.local`, then sign in with a backend account. The frontend calls ScoreCS, Score, and Advance through `/api`; user identity is read from `/api/auth/me`. P6's confirmation page is expected at `/advance/confirm` and receives `amount`, `months`, and `snapshotId` as query parameters. This repository does not yet include that P6 page.
 
 ### Switch to the real backend (later)
 1. Set `NEXT_PUBLIC_USE_MOCK_API=false` in `.env.development.local` (your machine only).
