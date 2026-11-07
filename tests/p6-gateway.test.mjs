@@ -21,6 +21,7 @@ test('P6 gateway over HTTP: identity, recovery and financial boundaries', async 
     if (url.pathname.endsWith('/senders/by-user/51178')) return json(200, { success: true, data: { tBankCustomerId: '0000003203', sgdAccountId: '0000006729' } });
     if (url.pathname.endsWith('/ScoreCS/eligibility')) return json(200, { IsEligible: true, IsSnapshotValid: true, OutSnapshotId: 66, SelectedPlanAmount: 100, SelectedTenor: 2, MonthlyInstalment: 50.298322116, Interest: 0.596644232, InterestRate: 0.0477, ApprovedBand: 'Band B', MaxAdvanceAmount: 500, MaturityDate: '2027-01-06' });
     if (request.method === 'POST' && url.pathname.endsWith('/AdvanceAccept/advances')) {
+      if (mode === 'demo-funding-pending') return json(502, { operationId: 6, status: 'DEPOSIT_IN_FLIGHT', version: 8, loanAccountId: 'test-loan-6782', needsReconciliation: true, dispatchOutstanding: true, errorCode: 'DEMO_FUNDING_RECONCILIATION_REQUIRED' });
       if (mode === 'timeout-after-accept') return; // Request arrived; result is unknown to the caller.
       if (mode === 'html-after-accept') { response.writeHead(500, { 'Content-Type': 'text/html' }); return response.end('<h1>Proxy error</h1>'); }
       return json(503, { operationId: 6, status: 'RECEIVED', errorCode: 'INTEREST_REPAYMENT_CONTRACT_PENDING', version: 1, ...(mode === 'forged-local-proof' ? { requestNotForwarded: true } : {}) });
@@ -76,6 +77,23 @@ test('P6 gateway over HTTP: identity, recovery and financial boundaries', async 
     assert.equal(result.body.errors[0].code, 'INTEREST_REPAYMENT_CONTRACT_PENDING');
     assert.equal(financialCalls().length, 1); assert.equal(financialCalls()[0].headers['idempotency-key'], 'stable-request-key');
     assert.equal(financialCalls()[0].body.userId, undefined); assert.equal(financialCalls()[0].body.serviceKey, undefined);
+  });
+
+  await t.test('uncertain demo deposit preserves its journal and never retries acceptance', async () => {
+    calls.length = 0; mode = 'demo-funding-pending';
+    const result = await gateway()(make('acceptances', body), ['acceptances'], 'test-token');
+    assert.equal(result.status, 502);
+    assert.equal(result.body.data.status, 'DEPOSIT_IN_FLIGHT');
+    assert.equal(result.body.data.operationId, 6);
+    assert.equal(result.body.data.version, 8);
+    assert.equal(result.body.data.needsReconciliation, true);
+    assert.equal(result.body.data.dispatchOutstanding, true);
+    assert.equal(result.body.data.loanAccountId, 'test-loan-6782');
+    assert.equal(result.body.errors[0].code, 'DEMO_FUNDING_RECONCILIATION_REQUIRED');
+    assert.match(result.body.errors[0].message, /deposit needs checking/);
+    assert.equal(financialCalls().length, 1);
+    assert.equal(financialCalls()[0].headers['idempotency-key'], 'stable-request-key');
+    mode = 'normal';
   });
   await t.test('cross-origin mutation is denied before authentication/provider calls', async () => {
     calls.length = 0;

@@ -74,8 +74,9 @@ bun run start --hostname 127.0.0.1 --port 3086
 
 Visit that exact address. `localhost` and `127.0.0.1` are different origins.
 The committed confirmation default remains disabled. An authorized local
-confirmation check can enable the UI while retaining C9's current Product 205
-block; this does not enable funded borrowing or automatic repayments.
+confirmation check can enable the UI. Once the new P6 backend is published,
+valid confirmation can approve a loan and deposit its principal, so do not run
+the old blocked-response procedure. Monthly collection remains disabled.
 
 Only set `P6_FRONTEND_ORIGIN` when the browser address differs from Next's
 internal request URL. It is not a backend URL or a secret. Setting the
@@ -91,7 +92,7 @@ enforces its own authorization, OTP, funding and product checks.
 | `bun run build` | Production compilation; currently uses webpack |
 | `bun run test:p6` | Gateway and recovery checks against a controlled local HTTP provider |
 | `bun run test:p6:e2e` | Chrome smoke checks against the running local frontend |
-| `bun run test:p6:live` | Person-assisted check against actual dev services; requires the opt-in below |
+| `bun run test:p6:live` | Person-assisted real offer review only; financial mutations are blocked in the test browser |
 
 The browser suite does not start the app automatically. Start the preview first.
 Its configured targets are restricted to loopback hosts. The smoke checks need
@@ -108,12 +109,9 @@ backend; it makes no authenticated financial request.
 
 ### Live confirmation check
 
-Before running, confirm the dedicated fixture and current backend behavior.
-The test expects the Product 205 block and is not a generic bank-payment test.
-Review the possible effects before running against changed backend behavior.
-
-Cancel any earlier undispatched test request in its original frontend tab.
-Then, in PowerShell:
+This command now reviews an actual offer only. It replaces the earlier
+Product 205 rejection test, whose expected block is removed by the new backend
+migration. The browser blocks P6/OTP mutations. In PowerShell:
 
 ```powershell
 $env:P6_E2E_INTERACTIVE = '1'
@@ -121,15 +119,14 @@ bun run test:p6:live
 Remove-Item Env:P6_E2E_INTERACTIVE
 ```
 
-Use the separate Chrome window titled `P6 Playwright test - sign in`, rather
-than an already-open frontend tab. Sign in and let the test retrieve the offer
-and open the SMS dialog. Enter the new code and click confirmation yourself.
+Use the separate Chrome window titled `P6 offer review - sign in`. Sign in and
+let the test retrieve the $100/two-month offer and check the demo notice. It
+does not request an SMS, accept a loan, deposit money or cancel a request.
 
-The visible dev facts are $100 for 2 months, Owned residence, 2 years and 0 credit
-cards. The test requests one SMS, permits one acceptance POST, expects the
-blocked response, reads the owner's status and cancels the undispatched request.
-There are no automatic financial retries. Unexpected outcomes stop the test;
-retain its request reference for investigation.
+The [backend migration guide](../backend/p6/README.md) describes the separate
+funded-borrowing validation still needed after publication. Authorize a specific
+borrower, amount and term before that check. A submitted request may have
+financial effects even if the response times out; preserve its reference.
 
 Artifacts are local and ignored under `test-results/`. Trace, HAR, video and
 exported authentication state are disabled. Passwords and OTPs are not captured.
@@ -145,7 +142,9 @@ No test results are automatically uploaded to Postman or GitHub.
 | A status GET returns 404 | Keep the request reference; absence of a visible record does not prove that an uncertain POST never executed |
 | An acceptance or cancellation response cannot be confirmed | Keep the request reference and use Check request status; do not start another advance |
 | A cancellation conflict returns a newer version or reconciliation flag | The UI adopts that state; check status before further action |
-| Product 205 returns `INTEREST_REPAYMENT_CONTRACT_PENDING` | Expected current bank-servicing boundary; keep the backend guard intact |
+| Product 205 returns `INTEREST_REPAYMENT_CONTRACT_PENDING` | The older backend remains deployed; review the P6 migration/publication status |
+| `DEMO_FUNDING_RECONCILIATION_REQUIRED` | Keep the original request; reconcile its recorded dispatch against bank evidence without repeating the deposit |
+| `MONTHLY_COLLECTION_UNAVAILABLE` | Expected: the bank's monthly batch is not running; partial/full repayments are early repayments with penalties |
 | OTP cannot look up contact details | Check Sender's PartyId and retrieve that Party profile with the team key; ID equality with UserId is allowed by P1's external-ID convention |
 | Live test times out at login | Use its separate Chrome window; the test window closes when the run ends |
 | Production styles are missing | Check `postcss.config.mjs`, the Tailwind import and a fresh webpack build |

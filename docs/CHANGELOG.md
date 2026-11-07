@@ -8,6 +8,11 @@ deployment or OutSystems publication.
 
 ### Added
 
+- P6 Model API migration for Product 205 demo funding after bank approval,
+  following Alan's `DepositCash` workaround. It records a separate dispatch and
+  exact deposit receipt before A8 activation, retaining unknown outcomes.
+- Browser recovery coverage for an uncertain deposit through reload and later
+  confirmation, plus a teaching-bank repayment limitation notice.
 - P6 `/advance/accept` review and confirmation UI with real eligibility terms.
 - P6 `/advance/confirm` entry point preserves the offer parameters handed off
   by P5 and reuses the acceptance screen.
@@ -18,6 +23,11 @@ deployment or OutSystems publication.
 
 ### Changed
 
+- Monthly collection is blocked at the authenticated P6 batch entry and its
+  timer is unscheduled. Partial/full bank repayments are early repayments with
+  penalties; no early-repayment feature is introduced here.
+- The assisted live browser test now reviews an offer only and blocks P6/OTP
+  mutations, replacing the obsolete expectation of a Product 205 rejection.
 - Dependency installs and project commands use Bun 1.4.3 with `bun.lock`,
   migrated from the npm lockfile. Existing Node.js tooling runtimes are retained.
 - Advance review uses a wider desktop container and two columns, with stacked
@@ -68,14 +78,28 @@ lint and a production build. Desktop review, phone review and phone OTP captures
 were visually inspected. The shared OTP component and other owners' features
 were not changed.
 
+### Product 205 implementation checks - 2026-11-07
+
+- P6 CS changes merged into the open Service Studio module, with zero native
+  validation errors and the ten pre-existing warnings. Saved/live model reads
+  verified dispatch/receipt guards and non-overlapping flow-node positions.
+- Lint, production build, 4 environment checks, 21 controlled HTTP gateway
+  checks and 27 browser checks passed. The assisted offer test was skipped
+  without its explicit interactive opt-in.
+- A read-only bank GET confirmed the loan-details fields used by funding
+  preflight. No OTP, loan approval, deposit, repayment or module publication was
+  executed during this implementation. Actual funded borrowing remains untested.
+
 ### Current limitations
 
-- C9 returns `INTEREST_REPAYMENT_CONTRACT_PENDING` for Product 205 before loan
-  creation and before its OTP-verification stage on that path.
+- The earlier deployed C9 returned `INTEREST_REPAYMENT_CONTRACT_PENDING` for
+  Product 205. This change replaces that boundary with a demo deposit path;
+  publication and actual funded-borrowing verification are still separate steps.
 - The passing live test does not prove funded borrowing, C9 code verification,
   normal monthly principal/interest collection or final settlement.
-- Confirmed funding evidence and Product 205 interest servicing remain required.
-- Automatic bank collection has not been activated by this frontend work.
+- Live approval/deposit/OTP/A8 activation evidence remains required.
+- Normal monthly collection is intentionally excluded: tBank's batch is not
+  running. Any future early repayment needs its own quote and penalty approval.
 - Mock-mode behavior is development-only; P6 financial confirmation uses real services.
 - Sending an advance directly home is not enabled; it needs the trusted C9/P2
   remittance continuation. P5 owns the merged offer and My Advance pages; P6's

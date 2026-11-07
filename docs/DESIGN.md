@@ -44,6 +44,8 @@ centered panel rather than stretching a paragraph across the full desktop width.
 - Format visible currency to two decimal places while retaining source precision
   for backend comparisons. Do not derive a new bank plan from rounded UI values.
 - Label total repayment as a quote until the bank confirms the applicable terms.
+- Explain the teaching-bank limitation: monthly repayments are not processed
+  automatically; early repayment may include a bank penalty.
 - Do not invent a funded date, repayment schedule, current accrued interest or final payoff.
 - Treat changes to amount/tenor as requiring another terms check.
 - Enable confirmation only for complete, supported terms: a positive amount up
@@ -64,6 +66,7 @@ centered panel rather than stretching a paragraph across the full desktop width.
 | Received/pending | Stable request reference and owner status recovery |
 | Unknown or invisible status | Preserve the reference; do not encourage another financial POST |
 | Product 205 contract pending | Borrowing temporarily unavailable with a clear explanation |
+| Deposit outcome unknown | Explain that the approved loan's deposit needs checking; retain its reference and offer status recovery, with no new submission or cancellation |
 | Completed | Require backend `COMPLETED`, a positive advance ID and a loan reference |
 | Canceled | Explain that the request was canceled before bank submission |
 | Declined | Explain the unsuccessful decision and allow another review where supported |

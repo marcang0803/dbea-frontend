@@ -68,6 +68,30 @@ test('disabled acceptance still shows real returned terms without requesting OTP
   expect(calls.map((call) => call.path)).toEqual(['/api/advance/eligibility']);
 });
 
+test('uncertain funding retains one borrowing request through reload and later confirmation', async ({ page }) => {
+  let confirmed = false;
+  const pending = { operationId: 6, version: 8, status: 'DEPOSIT_IN_FLIGHT', loanAccountId: 'test-loan-6782', needsReconciliation: true, dispatchOutstanding: true, errorCode: 'DEMO_FUNDING_RECONCILIATION_REQUIRED' };
+  const calls = await installApi(page, {
+    accept: () => ({ status: 502, data: pending }),
+    status: () => ({ data: confirmed ? { ...pending, status: 'COMPLETED', version: 11, advanceId: 12, needsReconciliation: false, dispatchOutstanding: false, errorCode: '' } : pending }),
+  });
+  await openOtp(page);
+  await page.getByLabel('One-time code').fill('111111');
+  await page.getByRole('button', { name: 'Confirm advance', exact: true }).click();
+  await expect(page.getByText('Your loan was approved, but its deposit needs checking.', { exact: false })).toBeVisible();
+  const key = new URL(page.url()).searchParams.get('requestKey');
+  await expect(page.getByRole('button', { name: 'Cancel this request' })).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Confirmation pending' })).toBeVisible();
+  expect(new URL(page.url()).searchParams.get('requestKey')).toBe(key);
+  confirmed = true;
+  await page.getByRole('button', { name: 'Check request status' }).click();
+  await expect(page.getByRole('heading', { name: 'Advance confirmed' })).toBeVisible();
+  await expect(page.getByRole('note')).toContainText('monthly repayments are not processed automatically');
+  await expect(page.getByRole('button', { name: 'Continue with SMS code' })).toHaveCount(0);
+  expect(calls.filter(call => call.path.endsWith('/acceptances'))).toHaveLength(1);
+});
+
 for (const [name, changes] of [
   ['missing maturity', { maturityDate: null }],
   ['impossible maturity', { maturityDate: '2027-02-30' }],

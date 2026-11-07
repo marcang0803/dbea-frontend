@@ -100,11 +100,16 @@ login, `/api` proxy. Other members add their screens under `app/(app)/…`.
 | `bun run test:env` | Bun/Next environment-selection and override checks |
 | `bun run test:p6` | P6 gateway and recovery checks against a controlled local provider |
 | `bun run test:p6:e2e` | P6 browser checks against a running local preview |
-| `bun run test:p6:live` | Opt-in person-assisted dev check; see [Development](docs/DEVELOPMENT.md#live-confirmation-check) |
+| `bun run test:p6:live` | Opt-in person-assisted real offer review; no OTP or borrowing; see [Development](docs/DEVELOPMENT.md#live-confirmation-check) |
 | `bun run rabbitmq:up` | Start RabbitMQ + tunnel (Docker), see `infra/rabbitmq/README.md` |
 | `bun run rabbitmq:url` | Print the tunnel URL / `RabbitHost` value |
 | `bun run rabbitmq:status` | Container status |
 | `bun run rabbitmq:down` | Stop RabbitMQ + tunnel |
+
+P6's [backend migration](backend/p6/README.md) implements the teaching-bank
+approval-then-deposit workaround. Normal monthly collection is disabled because
+tBank's batch is not running. Publishing and validating actual loan funding are
+separate from the frontend checks above.
 
 RabbitMQ is **only** needed when testing notifications against the OutSystems backend.
 You don't need it to view the frontend.

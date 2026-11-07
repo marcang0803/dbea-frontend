@@ -31,7 +31,7 @@ flowchart LR
     Advance --> C9[Advance CS acceptance]
     C9 --> A8[Advance AS records]
     C9 -. after supported preflight .-> OTP[Notify CS OTP verification]
-    C9 -. Product 205 execution currently blocked .-> Bank[tBank]
+    C9 -->|Approve then demo DepositCash| Bank[tBank]
 ```
 
 The browser calls same-origin `/api/...` routes. Backend URLs, internal service
@@ -167,12 +167,29 @@ forwarded-host headers cannot change the allowed origin.
 
 ## Current banking boundary
 
-As verified on 7 November 2026, Product 205 preflight returns
-`INTEREST_REPAYMENT_CONTRACT_PENDING` before C9 OTP verification or bank loan
-creation. A passing blocked-response test is not proof of funded borrowing.
+Alan clarified the teaching-bank contract on 7 November 2026: personal-loan
+approval does not disburse the principal. The approved project workaround is
+`DepositCash` after successful `ApproveRetailLoan`, into the borrower's deposit
+account; that same account can serve as the settlement account.
 
-The inspected active C10 payment path requires zero interest. Product 205's
-principal/interest helpers are not yet connected to that dispatch path. Funding
-evidence, due-period interest handling and final settlement need verification
-before automatic payments can be activated. The browser exposes no collector
-endpoint. The frontend confirmation flag does not bypass backend safeguards.
+The P6 [Model API migration](../backend/p6/README.md) adds a separate durable
+`BANK_DEMO_DEPOSIT` checkpoint. It binds current loan terms and Worker permission,
+attempts the deposit once and requires a transaction ID and exact principal-sized
+balance increase before persisting funding proof and activating A8. A timeout,
+malformed receipt or unrecorded outcome stays in reconciliation. A replay never
+automatically repeats a dispatched deposit. Native funding still uses its
+separate legacy proof path; the demo receipt is not labelled as a type-403 bank
+disbursement.
+
+Normal monthly instalments are performed by a tBank batch that is not running.
+P6's authenticated batch entry returns `MONTHLY_COLLECTION_UNAVAILABLE` and its
+timer is unscheduled. Partial/full loan repayment are penalty-bearing **early
+repayment** operations; neither is used as a monthly instalment. Early repayment
+and C9-to-P2 automatic send-home are outside this change.
+
+The migration is source implementation, not proof of published or executed bank
+behavior. The earlier blocked-path integration evidence remains historical.
+Publication and one specifically authorized funded borrowing test are still
+required. The frontend confirmation default remains disabled; enabling it does
+not bypass backend ownership, OTP, dispatch or funding checks. The browser
+exposes no collector endpoint.

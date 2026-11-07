@@ -220,6 +220,8 @@ export default function AdvanceAcceptance({ initialAmount = '', initialMonths = 
         })}
       </ol>
 
+      <p role="note" className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">Teaching-bank demo: monthly repayments are not processed automatically. The instalments shown are quoted terms. Early repayment may include a bank penalty.</p>
+
       {view ? (
         <section aria-live="polite" className="mx-auto mt-8 max-w-3xl rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-10">
           <div className={`mb-5 grid h-12 w-12 place-items-center rounded-2xl text-xl ${view.tone === 'success' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-50 text-amber-700'}`} aria-hidden="true">{view.tone === 'success' ? '✓' : '◷'}</div>
@@ -275,10 +277,10 @@ export default function AdvanceAcceptance({ initialAmount = '', initialMonths = 
               <Row label="Quoted total repayment">{formatMoney(offer.selectedPlanAmount + offer.interest)}</Row>
               <Row label="Maturity date">{dateLabel(offer.maturityDate)}</Row>
             </dl>
-            <p className="px-5 pb-5 text-xs leading-5 text-slate-400 sm:px-8 sm:pb-7">Amounts are shown to two decimal places. The final instalment follows the bank’s confirmed balance.</p>
+            <p className="px-5 pb-5 text-xs leading-5 text-slate-400 sm:px-8 sm:pb-7">Quoted amounts are shown to two decimal places. An early repayment needs a separate bank quote, including any penalty.</p>
           </section>}
 
-          {valid && !offer.acceptanceAvailable && <section role="status" className="rounded-2xl border border-amber-200 bg-amber-50 p-5 sm:p-7"><h2 className="font-semibold text-amber-950">Borrowing temporarily unavailable</h2><p className="mt-2 text-sm leading-6 text-amber-800">You can review your terms, but we are still verifying bank funding and repayments. No loan has been created from this offer.</p><button type="button" disabled className={`${PRIMARY} mt-4`}>Confirmation unavailable</button></section>}
+          {valid && !offer.acceptanceAvailable && <section role="status" className="rounded-2xl border border-amber-200 bg-amber-50 p-5 sm:p-7"><h2 className="font-semibold text-amber-950">Borrowing temporarily unavailable</h2><p className="mt-2 text-sm leading-6 text-amber-800">Confirmation is not enabled for this environment. You can review your terms. No loan has been created from this offer.</p><button type="button" disabled className={`${PRIMARY} mt-4`}>Confirmation unavailable</button></section>}
 
           {valid && offer.acceptanceAvailable && <section className="rounded-[1.75rem] border border-slate-200 bg-white p-5 sm:p-7">
             <h2 className="text-lg font-semibold text-slate-950">A few details for the bank</h2>
