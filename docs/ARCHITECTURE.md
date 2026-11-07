@@ -10,6 +10,12 @@ services. Their entities and action flows are maintained outside this repository
 The current frontend uses Next.js 16 App Router, React 19, JavaScript and Tailwind
 CSS 4. Exact versions are in [package.json](../package.json) and its lockfile.
 
+Bun manages dependencies through `bun.lock` and runs the project commands.
+Next.js, Playwright and the existing gateway test runner retain their Node.js
+runtime; the tested Bun version is recorded in `package.json`.
+`bunfig.toml` disables Bun's dotenv preloading so Next.js retains ownership of
+mode selection and environment-file precedence.
+
 ## Request boundaries
 
 ```mermaid
