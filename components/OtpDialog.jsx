@@ -48,6 +48,8 @@ function OtpDialogBody({
   title = 'Confirm with SMS code',
   description = 'We sent a one-time code to your mobile number.',
   confirmLabel = 'Confirm',
+  requestChallenge = p3Api.requestOtp,
+  resendAllowed = true,
   onSubmit,
   onClose,
 }) {
@@ -66,7 +68,8 @@ function OtpDialogBody({
   const fetchChallenge = useCallback(async () => {
     const seq = ++requestSeq.current;
     try {
-      const { data } = await p3Api.requestOtp(purpose, referenceId);
+      const result = await requestChallenge(purpose, referenceId);
+      const data = result?.data ?? result;
       if (seq !== requestSeq.current) return;
       const t = Date.now();
       setChallenge(data);
@@ -79,7 +82,7 @@ function OtpDialogBody({
       setStatus('needs-new-code');
       setError(err instanceof ApiError ? err.message : 'Could not send the code. Please try again.');
     }
-  }, [purpose, referenceId]);
+  }, [purpose, referenceId, requestChallenge]);
 
   // First code is requested when the dialog opens.
   useEffect(() => {
@@ -225,7 +228,7 @@ function OtpDialogBody({
             <button
               type="button"
               onClick={resend}
-              disabled={busy || (cooldownLeft > 0 && !mustGetNewCode)}
+              disabled={!resendAllowed || busy || (cooldownLeft > 0 && !mustGetNewCode)}
               className="font-medium text-emerald-700 hover:underline disabled:cursor-not-allowed disabled:text-slate-400 disabled:no-underline"
             >
               {cooldownLeft > 0 && !mustGetNewCode ? `Resend code in ${cooldownLeft}s` : 'Send a new code'}
@@ -239,6 +242,7 @@ function OtpDialogBody({
               Cancel
             </button>
           </div>
+          {!resendAllowed && <p className="text-xs leading-5 text-slate-500">To request another code, close this confirmation and cancel the pending advance request first.</p>}
         </form>
       </div>
     </div>

@@ -35,3 +35,11 @@ Thumbs.db
 # misc
 *.pem
 .vercel
+
+# Browser test artifacts may contain private dev account information.
+/test-results/
+/playwright-report/
+/playwright/.auth/
+
+# Local agent skills
+/skills/
