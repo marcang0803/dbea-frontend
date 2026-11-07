@@ -4,7 +4,13 @@ Next.js frontend for **RemitEase**, a transparent cross-border remittance app fo
 The backend is built in **OutSystems** (SMU environment); this app only calls it through its own
 `/api` routes.
 
-**Stack:** Next.js 16 (App Router) · React 19 · JavaScript · Tailwind CSS 4. No other libraries.
+**Stack:** Next.js 16 (App Router) · React 19 · JavaScript · Tailwind CSS 4.
+Playwright provides browser tests.
+
+**Project guides:** [documentation index](docs/README.md),
+[architecture](docs/ARCHITECTURE.md), [development](docs/DEVELOPMENT.md),
+[contributing](docs/CONTRIBUTING.md), [design](docs/DESIGN.md),
+[changelog](docs/CHANGELOG.md) and [PR template](docs/pull_request_template.md).
 
 ---
 
@@ -19,8 +25,9 @@ npm run dev
 
 Open **http://localhost:3000**. It redirects to `/home`.
 
-`.env.development` turns on **mock mode** (`NEXT_PUBLIC_USE_MOCK_API=true`), so every screen
-works without OutSystems, using sample data from `lib/mock/mockStore.js`.
+`.env.development` turns on **mock mode** (`NEXT_PUBLIC_USE_MOCK_API=true`) for supported
+shared screens, using the stores in `lib/mock/`. P6 advance routes always use the real
+backend, including OTP. See [Development](docs/DEVELOPMENT.md) for real integration setup.
 
 | Page | What you can try |
 |---|---|
@@ -31,18 +38,21 @@ works without OutSystems, using sample data from `lib/mock/mockStore.js`.
 | `/dev` | P3 dev page: open the **OTP dialog** (code `123456` = correct, other digits = wrong, `000000` = expired) and **add a test notification** to see the bell update |
 
 Mock data lives in memory. Restart `npm run dev` to reset it.
-Links to screens other members haven't built yet (e.g. `/send`, `/rates/lock`) show a 404 for now. That's expected.
+Routes now also include family, remittance, rate locks/alerts and `/advance/accept`.
+Their availability depends on each screen's mock support and backend configuration.
 
 P5 uses the mock API in local development by default. The offer page scores the mock user and checks a sample S$500 against 3-, 6-, and 12-month terms. The advance schedule uses a seeded example; upcoming monthly rows are projected from the advance's next due date because the backend repayment-history endpoint does not return future schedule rows.
 
-For the real P5 services, set `NEXT_PUBLIC_USE_MOCK_API=false` in `.env.development.local`, then sign in with a backend account. The frontend calls ScoreCS, Score, and Advance through `/api`; user identity is read from `/api/auth/me`. P6's confirmation page is expected at `/advance/confirm` and receives `amount`, `months`, and `snapshotId` as query parameters. This repository does not yet include that P6 page.
+For the real P5 services, set `NEXT_PUBLIC_USE_MOCK_API=false` in `.env.development.local`, then sign in with a backend account. The frontend calls ScoreCS, Score, and Advance through `/api`; user identity is read from `/api/auth/me`. P5 hands `amount`, `months`, and `snapshotId` to `/advance/confirm`, which reuses P6's `/advance/accept` screen. P6 revalidates the selected terms through its real gateway; its current supported term is 1–6 months.
 
-### Switch to the real backend (later)
+### Switch to the real backend
 1. Set `NEXT_PUBLIC_USE_MOCK_API=false` in `.env.development.local` (your machine only).
-2. P2's proxy (`app/api/[...path]/route.js`) must exist and forward the routes in `docs/p3-proxy-routes.md`.
+2. Configure private server settings from `.env.example`; the proxy is implemented in
+   `app/api/[...path]/route.js`, with a separate P6 gateway under `app/api/advance/`.
 3. Restart `npm run dev`.
 
-The mock API is always disabled in production builds (`npm run build && npm start`).
+Mock handlers are disabled in production. Set `NEXT_PUBLIC_USE_MOCK_API=false` before
+building so browser helpers use real routes.
 
 ---
 
@@ -79,6 +89,9 @@ login, `/api` proxy. Other members add their screens under `app/(app)/…`.
 | `npm run dev` | Dev server on http://localhost:3000 |
 | `npm run build` / `npm start` | Production build / serve it |
 | `npm run lint` | ESLint (Next.js rules) |
+| `npm run test:p6` | P6 gateway and recovery checks against a controlled local provider |
+| `npm run test:p6:e2e` | P6 browser checks against a running local preview |
+| `npm run test:p6:live` | Opt-in person-assisted dev check; see [Development](docs/DEVELOPMENT.md#live-confirmation-check) |
 | `npm run rabbitmq:up` | Start RabbitMQ + tunnel (Docker), see `infra/rabbitmq/README.md` |
 | `npm run rabbitmq:url` | Print the tunnel URL / `RabbitHost` value |
 | `npm run rabbitmq:status` | Container status |

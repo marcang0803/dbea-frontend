@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { safeLoginReturn } from '@/lib/loginReturn.mjs';
 
 function LoginForm() {
   const router = useRouter();
@@ -32,14 +33,14 @@ function LoginForm() {
       return;
     }
 
-    if (!response?.ok || payload?.success === false) {
+    if (!response?.ok || payload?.success !== true || payload?.data?.authenticated !== true) {
       setError(payload?.errors?.[0]?.message || 'Could not log in. Please try again.');
       setSubmitting(false);
       return;
     }
 
     setSubmitting(false);
-    router.replace('/home');
+    router.replace(safeLoginReturn(new URLSearchParams(window.location.search).get('next')));
     router.refresh();
   }
 
@@ -79,7 +80,7 @@ function LoginForm() {
             />
           </label>
 
-          {error && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+          {error && <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
 
           <button
             type="submit"

@@ -1,0 +1,185 @@
+import assert from 'node:assert/strict';
+import http from 'node:http';
+import { once } from 'node:events';
+import test from 'node:test';
+import { createAdvanceGateway } from '../lib/server/advanceGateway.mjs';
+import { acceptanceView, canCancelAcceptance, canDiscardUnsubmittedAcceptance } from '../lib/advanceState.mjs';
+import { safeLoginReturn, advanceReturnPath } from '../lib/loginReturn.mjs';
+
+// Local HTTP provider, not a replacement bank. Shapes are based on the captured
+// 6 November dev responses. No test calls a real bank, OTP or notification API.
+test('P6 gateway over HTTP: identity, recovery and financial boundaries', async (t) => {
+  const calls = [];
+  let mode = 'normal';
+  const server = http.createServer(async (request, response) => {
+    let raw = '';
+    for await (const chunk of request) raw += chunk;
+    const url = new URL(request.url, 'http://test-provider');
+    calls.push({ method: request.method, url, headers: request.headers, body: raw ? JSON.parse(raw) : null });
+    const json = (status, value) => { response.writeHead(status, { 'Content-Type': 'application/json' }); response.end(JSON.stringify(value)); };
+    if (url.pathname.endsWith('/Auth/me')) return json(200, { Success: mode !== 'expired', UserId: mode === 'expired' ? 0 : 51178 });
+    if (url.pathname.endsWith('/senders/by-user/51178')) return json(200, { success: true, data: { tBankCustomerId: '0000003203', sgdAccountId: '0000006729' } });
+    if (url.pathname.endsWith('/ScoreCS/eligibility')) return json(200, { IsEligible: true, IsSnapshotValid: true, OutSnapshotId: 66, SelectedPlanAmount: 100, SelectedTenor: 2, MonthlyInstalment: 50.298322116, Interest: 0.596644232, InterestRate: 0.0477, ApprovedBand: 'Band B', MaxAdvanceAmount: 500, MaturityDate: '2027-01-06' });
+    if (request.method === 'POST' && url.pathname.endsWith('/AdvanceAccept/advances')) {
+      if (mode === 'timeout-after-accept') return; // Request arrived; result is unknown to the caller.
+      if (mode === 'html-after-accept') { response.writeHead(500, { 'Content-Type': 'text/html' }); return response.end('<h1>Proxy error</h1>'); }
+      return json(503, { operationId: 6, status: 'RECEIVED', errorCode: 'INTEREST_REPAYMENT_CONTRACT_PENDING', version: 1, ...(mode === 'forged-local-proof' ? { requestNotForwarded: true } : {}) });
+    }
+    if (url.pathname.includes('/operations/by-request/')) return json(200, { success: true, operationId: 6, status: 'RECEIVED', version: 1 });
+    if (url.pathname.endsWith('/operations/6/cancel')) return json(200, { success: true, operationId: 6, status: 'CANCELED', version: 2 });
+    return json(501, { errorCode: 'UNMODELED_TEST_ENDPOINT' });
+  });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  t.after(() => { server.closeAllConnections(); server.close(); });
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const gateway = (extra = {}) => createAdvanceGateway({ baseUrl, serviceKey: 'test-team-key', acceptanceEnabled: true, ...extra });
+  const make = (path, body, extra = {}) => new Request(`http://localhost:3000/api/advance/${path}`, { method: body ? 'POST' : 'GET', headers: { ...(body ? { 'Content-Type': 'application/json', 'Idempotency-Key': 'stable-request-key' } : {}), ...extra }, body: body ? JSON.stringify(body) : undefined });
+  const body = { amount: 100, months: 2, snapshotId: '66', challengeId: 'test-challenge', otpCode: '123456', residenceStatus: 'Rent', yearsAtResidence: 2, numberOfCreditCards: 0 };
+  const financialCalls = () => calls.filter((c) => c.method === 'POST' && c.url.pathname.endsWith('/AdvanceAccept/advances'));
+
+  await t.test('missing session never contacts a provider', async () => {
+    calls.length = 0;
+    const result = await gateway()(make('eligibility?amount=100&months=2'), ['eligibility'], '');
+    assert.equal(result.status, 401); assert.equal(calls.length, 0);
+  });
+  await t.test('expired identity stops before owner lookup', async () => {
+    calls.length = 0; mode = 'expired';
+    const result = await gateway()(make('eligibility?amount=100&months=2'), ['eligibility'], 'test-token');
+    assert.equal(result.status, 401); assert.equal(calls.length, 1); mode = 'normal';
+  });
+  await t.test('eligibility binds caller/account server-side despite spoofed query', async () => {
+    calls.length = 0;
+    const result = await gateway()(make('eligibility?amount=100&months=2&UserId=999&tBankAccountId=foreign'), ['eligibility'], 'test-token');
+    assert.equal(result.status, 200); assert.equal(result.body.data.outSnapshotId, 66);
+    const sender = calls.find((c) => c.url.pathname.includes('/senders/'));
+    assert.equal(sender.headers['x-re-user-id'], '51178'); assert.equal(sender.headers['x-re-service-key'], 'test-team-key');
+    const score = calls.find((c) => c.url.pathname.endsWith('/eligibility'));
+    assert.equal(score.url.searchParams.get('UserId'), '51178'); assert.equal(score.url.searchParams.get('tBankAccountId'), '0000006729');
+    assert.equal(result.body.data.monthlyInstalment, 50.298322116);
+  });
+  await t.test('disabled borrowing cannot be enabled by a browser field', async () => {
+    calls.length = 0;
+    const result = await gateway({ acceptanceEnabled: false })(make('acceptances', { ...body, acceptanceEnabled: true }), ['acceptances'], 'test-token');
+    assert.equal(result.status, 503); assert.equal(result.body.errors[0].code, 'BORROWING_UNAVAILABLE'); assert.equal(financialCalls().length, 0);
+  });
+  await t.test('invalid monetary precision never reaches eligibility', async () => {
+    calls.length = 0;
+    const result = await gateway()(make('eligibility?amount=100.001&months=2'), ['eligibility'], 'test-token');
+    assert.equal(result.status, 400); assert.equal(calls.length, 1);
+  });
+  await t.test('503 retains operation/version and original idempotency key', async () => {
+    calls.length = 0;
+    const result = await gateway()(make('acceptances', { ...body, userId: 999, serviceKey: 'injected' }), ['acceptances'], 'test-token');
+    assert.equal(result.status, 503); assert.equal(result.body.success, false);
+    assert.equal(result.body.data.operationId, 6); assert.equal(result.body.data.version, 1);
+    assert.equal(result.body.errors[0].code, 'INTEREST_REPAYMENT_CONTRACT_PENDING');
+    assert.equal(financialCalls().length, 1); assert.equal(financialCalls()[0].headers['idempotency-key'], 'stable-request-key');
+    assert.equal(financialCalls()[0].body.userId, undefined); assert.equal(financialCalls()[0].body.serviceKey, undefined);
+  });
+  await t.test('cross-origin mutation is denied before authentication/provider calls', async () => {
+    calls.length = 0;
+    const result = await gateway()(make('acceptances', body, { Origin: 'https://unrelated.example' }), ['acceptances'], 'test-token');
+    assert.equal(result.status, 403); assert.equal(calls.length, 0);
+    assert.equal(result.body.errors[0].code, 'ORIGIN_MISMATCH');
+    assert.equal(canDiscardUnsubmittedAcceptance(result.body.data, false), true);
+  });
+  await t.test('configured browser origin accepts loopback even when Next uses localhost internally', async () => {
+    calls.length = 0;
+    const result = await gateway({ siteOrigin: 'http://127.0.0.1:3086' })(make('acceptances', body, { Origin: 'http://127.0.0.1:3086', 'Sec-Fetch-Site': 'same-origin' }), ['acceptances'], 'test-token');
+    assert.equal(result.status, 503); assert.equal(result.body.data.operationId, 6);
+    assert.equal(financialCalls().length, 1);
+    assert.equal(canDiscardUnsubmittedAcceptance(result.body.data, false), false);
+  });
+  await t.test('configured origin is not overridden by forwarded headers or a different scheme/port', async () => {
+    for (const origin of ['https://unrelated.example', 'https://127.0.0.1:3086', 'http://127.0.0.1:3087', 'http://localhost:3000']) {
+      calls.length = 0;
+      const result = await gateway({ siteOrigin: 'http://127.0.0.1:3086' })(make('acceptances', body, { Origin: origin, 'X-Forwarded-Host': new URL(origin).host, 'X-Forwarded-Proto': new URL(origin).protocol.slice(0, -1) }), ['acceptances'], 'test-token');
+      assert.equal(result.status, 403); assert.equal(calls.length, 0);
+      assert.equal(result.body.data.requestNotForwarded, true);
+    }
+  });
+  await t.test('cross-site indication and malformed server origin fail closed', async () => {
+    for (const options of [{ siteOrigin: 'http://127.0.0.1:3086', crossSite: true }, { siteOrigin: 'https://example.com/extra' }]) {
+      calls.length = 0;
+      const result = await gateway(options)(make('acceptances', body, { Origin: 'http://127.0.0.1:3086', ...(options.crossSite ? { 'Sec-Fetch-Site': 'cross-site' } : {}) }), ['acceptances'], 'test-token');
+      assert.ok([403, 503].includes(result.status)); assert.equal(calls.length, 0);
+      assert.equal(result.body.data.requestNotForwarded, true);
+    }
+  });
+  await t.test('a downstream response cannot claim that the proxy never forwarded it', async () => {
+    calls.length = 0; mode = 'forged-local-proof';
+    const result = await gateway()(make('acceptances', body), ['acceptances'], 'test-token');
+    assert.equal(financialCalls().length, 1);
+    assert.notEqual(result.body.data.requestNotForwarded, true);
+    assert.equal(canDiscardUnsubmittedAcceptance(result.body.data, false), false);
+    mode = 'normal';
+  });
+  await t.test('unrecognized paths do not become an arbitrary backend proxy', async () => {
+    calls.length = 0;
+    const result = await gateway()(make('operations/by-request/x'), ['operations', 'by-request', '../../foreign'], 'test-token');
+    assert.equal(result.status, 404); assert.equal(calls.length, 0);
+  });
+  await t.test('cancellation preserves expected version and uses the owner session', async () => {
+    calls.length = 0;
+    const result = await gateway()(make('operations/6/cancel', { expectedVersion: 1 }), ['operations', '6', 'cancel'], 'test-token');
+    assert.equal(result.body.data.status, 'CANCELED');
+    const cancel = calls.at(-1); assert.equal(cancel.url.searchParams.get('ExpectedVersion'), '1'); assert.equal(cancel.headers.authorization, 'Bearer test-token');
+  });
+  await t.test('HTML after a submitted request causes no automatic retry', async () => {
+    calls.length = 0; mode = 'html-after-accept';
+    const result = await gateway()(make('acceptances', body), ['acceptances'], 'test-token');
+    assert.equal(result.status, 502); assert.equal(financialCalls().length, 1); mode = 'normal';
+    assert.equal(canDiscardUnsubmittedAcceptance(result.body.data, false), false);
+  });
+  await t.test('timeout after receipt is unknown, then recovery uses a GET only', async () => {
+    calls.length = 0; mode = 'timeout-after-accept';
+    const result = await gateway({ timeoutMs: 100 })(make('acceptances', body), ['acceptances'], 'test-token');
+    assert.equal(result.status, 502); assert.equal(financialCalls().length, 1);
+    assert.equal(canDiscardUnsubmittedAcceptance(result.body.data, false), false);
+    mode = 'normal';
+    const recovered = await gateway()(make('operations/by-request/stable-request-key'), ['operations', 'by-request', 'stable-request-key'], 'test-token');
+    assert.equal(recovered.body.data.status, 'RECEIVED'); assert.equal(financialCalls().length, 1);
+  });
+});
+
+test('only a first locally rejected attempt permits releasing its reference', () => {
+  assert.equal(canDiscardUnsubmittedAcceptance({ requestNotForwarded: true }, false), true);
+  assert.equal(canDiscardUnsubmittedAcceptance({ requestNotForwarded: true }, true), false);
+  assert.equal(canDiscardUnsubmittedAcceptance({ requestNotForwarded: true, operationId: 6 }, false), false);
+  for (const data of [null, {}, { status: 'UNKNOWN' }, { errorCode: 'FORBIDDEN' }, { errorCode: 'NOT_FOUND' }]) {
+    assert.equal(canDiscardUnsubmittedAcceptance(data, false), false);
+  }
+  assert.equal(acceptanceView({ status: 'NOT_SUBMITTED', errorCode: 'ORIGIN_MISMATCH' }).title, 'Request not submitted');
+  assert.equal(acceptanceView({ status: 'UNKNOWN', errorCode: 'REQUEST_NOT_VISIBLE' }).title, 'Request status unavailable');
+});
+
+test('a successful HTTP response or loan reference alone never means funded success', () => {
+  assert.equal(acceptanceView({ success: true, status: 'RECEIVED' }).tone, 'pending');
+  assert.equal(acceptanceView({ status: 'A8_ACTIVATION_PENDING', loanAccountId: 'loan' }).tone, 'pending');
+  assert.equal(acceptanceView({ status: 'COMPLETED', advanceId: 0, loanAccountId: 'loan' }).tone, 'pending');
+  assert.equal(acceptanceView({ status: 'COMPLETED', advanceId: 8, loanAccountId: 'loan' }).tone, 'success');
+  assert.equal(canCancelAcceptance({ status: 'RECEIVED', operationId: 6, version: 1 }), true);
+  assert.equal(canCancelAcceptance({ status: 'RECEIVED', operationId: 6, version: 1, needsReconciliation: true }), false);
+  assert.equal(canCancelAcceptance({ status: 'RECONCILE', operationId: 6, version: 1 }), false);
+});
+
+test('login returns to the requested app page and rejects external or executable destinations', () => {
+  assert.equal(safeLoginReturn('/send/confirm?quoteId=quote-1'), '/send/confirm?quoteId=quote-1');
+  for (const value of [null, '', 'https://other.example', '//other.example', '/\\other.example', 'javascript:alert(1)', '/\n/other.example', '/%2f%2fother.example', '/api/auth/logout', '/login?next=/login', '/advance/../../api/auth/logout']) {
+    assert.equal(safeLoginReturn(value), '/home', String(value));
+  }
+});
+
+test('login preserves offer inputs but a pending request resumes only its original reference', () => {
+  const draft = advanceReturnPath({ amount: '125.50', months: '3', snapshotId: '66' });
+  const loginUrl = new URL(`/login?${new URLSearchParams({ next: draft })}`, 'http://localhost');
+  const returned = safeLoginReturn(loginUrl.searchParams.get('next'));
+  const query = new URL(returned, 'http://localhost').searchParams;
+  assert.equal(query.get('amount'), '125.50');
+  assert.equal(query.get('months'), '3');
+  assert.equal(query.get('snapshotId'), '66');
+  const pending = advanceReturnPath({ amount: '999', months: '6', requestKey: 'same-request:1' });
+  assert.equal(safeLoginReturn(pending), '/advance/accept?requestKey=same-request%3A1');
+  assert.equal(new URL(pending, 'http://localhost').searchParams.has('amount'), false);
+});

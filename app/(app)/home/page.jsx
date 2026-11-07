@@ -268,6 +268,12 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* P6: review a real advance offer without treating eligibility as funding. */}
+      <Link href="/advance/accept" className="mt-6 flex items-center justify-between gap-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 transition hover:border-emerald-400 focus-visible:ring-4 focus-visible:ring-emerald-600/20">
+        <span><span className="block font-semibold text-emerald-950">Need a little extra support?</span><span className="mt-1 block text-sm text-emerald-800">Review your emergency advance terms.</span></span>
+        <span aria-hidden="true" className="text-emerald-700">→</span>
+      </Link>
+
       {/* Recent sends */}
       <section className="mt-9">
         <div className="flex items-center justify-between">

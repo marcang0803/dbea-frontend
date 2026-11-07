@@ -8,6 +8,9 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
+    "test:p6": "node --test tests/p6-gateway.test.mjs",
+    "test:p6:e2e": "playwright test --project=smoke",
+    "test:p6:live": "playwright test --project=live-confirmation",
     "rabbitmq:up": "docker compose -f infra/rabbitmq/docker-compose.yml up -d",
     "rabbitmq:down": "docker compose -f infra/rabbitmq/docker-compose.yml down",
     "rabbitmq:status": "docker compose -f infra/rabbitmq/docker-compose.yml ps",
@@ -19,6 +22,8 @@
     "react-dom": "19.3.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.65.0",
+    "@tailwindcss/postcss": "^4.3.3",
     "@tailwindcss/turbopack": "^4",
     "eslint": "^9",
     "eslint-config-next": "16.4.2",
