@@ -77,7 +77,21 @@ async function handle(request, { params }) {
   }
 
   if (route === 'GET advances/me') {
-    return ok({ userIdOut: store.userId, latestScore: 724, latestBand: 'B' });
+    const advances = store.advances
+      .filter((advance) => advance.userId === store.userId)
+      .map((advance) => ({
+        ...advance,
+        repayments: store.repayments.filter(
+          (repayment) => repayment.advanceId === advance.advanceId,
+        ),
+      }));
+
+    return ok({
+      userIdOut: store.userId,
+      latestScore: 724,
+      latestBand: 'B',
+      advances,
+    });
   }
 
   if (route === 'GET eligibility') {
