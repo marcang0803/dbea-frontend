@@ -18,6 +18,8 @@ deployment or OutSystems publication.
 
 ### Changed
 
+- Dependency installs and project commands use Bun 1.4.3 with `bun.lock`,
+  migrated from the npm lockfile. Existing Node.js tooling runtimes are retained.
 - Advance review uses a wider desktop container and two columns, with stacked
   content on smaller screens.
 - Login returns to a validated application destination and preserves advance

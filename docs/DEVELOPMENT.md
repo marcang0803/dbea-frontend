@@ -2,7 +2,8 @@
 
 ## Prerequisites
 
-- Node.js 20.9 or newer and npm.
+- Bun 1.4.3, recorded in `package.json` as the package manager.
+- Node.js 20.9 or newer for Next.js, Playwright and the Node test runner.
 - Google Chrome for the configured Playwright projects.
 - A dedicated dev account and backend connectivity for real integrations.
 - Docker only when working on the optional RabbitMQ stack.
@@ -16,9 +17,21 @@ version-specific conventions; consult the relevant installed guides under
 From the repository root:
 
 ```sh
-npm ci
-npm run dev
+bun install --frozen-lockfile
+bun run dev
 ```
+
+`bun.lock` is the dependency lockfile. Use `bun install --frozen-lockfile` after
+cloning or pulling changes. To intentionally change dependencies, use
+`bun add <package>` or `bun remove <package>` and commit both `package.json` and
+`bun.lock`. The existing scripts keep their Node.js runtime; this migration
+changes the package manager and command entry points.
+
+The root `bunfig.toml` sets `env = false`: Bun does not preload `.env` files into
+child processes. Next.js remains responsible for loading the environment for
+`dev`, `build` and `start`. This prevents development mock flags from leaking
+into production and preserves `.env.development.local` / `.env.production.local`
+overrides. Explicit shell environment variables still take precedence.
 
 Open `http://localhost:3000`. Development defaults enable the mock handlers for
 supported shared screens. Mock stores are in memory and reset on server restart.
@@ -55,8 +68,8 @@ For the existing loopback preview, configure
 `P6_FRONTEND_ORIGIN=http://127.0.0.1:3086`, then run:
 
 ```sh
-npm run build
-npm start -- --hostname 127.0.0.1 --port 3086
+bun run build
+bun run start --hostname 127.0.0.1 --port 3086
 ```
 
 Visit that exact address. `localhost` and `127.0.0.1` are different origins.
@@ -73,11 +86,12 @@ enforces its own authorization, OTP, funding and product checks.
 
 | Command | What it establishes |
 | --- | --- |
-| `npm run lint` | Static JavaScript/React checks |
-| `npm run build` | Production compilation; currently uses webpack |
-| `npm run test:p6` | Gateway and recovery checks against a controlled local HTTP provider |
-| `npm run test:p6:e2e` | Chrome smoke checks against the running local frontend |
-| `npm run test:p6:live` | Person-assisted check against actual dev services; requires the opt-in below |
+| `bun run lint` | Static JavaScript/React checks |
+| `bun run test:env` | Four isolated Bun/Next environment-precedence checks using synthetic files |
+| `bun run build` | Production compilation; currently uses webpack |
+| `bun run test:p6` | Gateway and recovery checks against a controlled local HTTP provider |
+| `bun run test:p6:e2e` | Chrome smoke checks against the running local frontend |
+| `bun run test:p6:live` | Person-assisted check against actual dev services; requires the opt-in below |
 
 The browser suite does not start the app automatically. Start the preview first.
 Its configured targets are restricted to loopback hosts. The smoke checks need
@@ -103,7 +117,7 @@ Then, in PowerShell:
 
 ```powershell
 $env:P6_E2E_INTERACTIVE = '1'
-npm run test:p6:live
+bun run test:p6:live
 Remove-Item Env:P6_E2E_INTERACTIVE
 ```
 

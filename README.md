@@ -16,14 +16,22 @@ Playwright provides browser tests.
 
 ## Run it (no backend needed)
 
-Requirements: **Node.js 20.9 or newer** (`node -v`) and npm.
+Requirements: **Bun 1.4.3** (`bun --version`) and **Node.js 20.9 or newer** (`node -v`).
+Bun installs dependencies and runs the project scripts; Next.js, Playwright and
+the existing Node test runner retain their Node.js runtime.
 
 ```bash
-npm install
-npm run dev
+bun install --frozen-lockfile
+bun run dev
 ```
 
 Open **http://localhost:3000**. It redirects to `/home`.
+
+Commit dependency updates to `bun.lock`. The `packageManager` field records the
+tested Bun version; use `bun install --frozen-lockfile` for reproducible installs.
+
+`bunfig.toml` disables Bun's automatic environment-file loading so Next.js keeps
+its normal development/production selection and local-override precedence.
 
 `.env.development` turns on **mock mode** (`NEXT_PUBLIC_USE_MOCK_API=true`) for supported
 shared screens, using the stores in `lib/mock/`. P6 advance routes always use the real
@@ -37,7 +45,7 @@ backend, including OTP. See [Development](docs/DEVELOPMENT.md) for real integrat
 | `/advance/me` | P5 advance records, repayment history, and projected future instalments |
 | `/dev` | P3 dev page: open the **OTP dialog** (code `123456` = correct, other digits = wrong, `000000` = expired) and **add a test notification** to see the bell update |
 
-Mock data lives in memory. Restart `npm run dev` to reset it.
+Mock data lives in memory. Restart `bun run dev` to reset it.
 Routes now also include family, remittance, rate locks/alerts and `/advance/accept`.
 Their availability depends on each screen's mock support and backend configuration.
 
@@ -49,7 +57,7 @@ For the real P5 services, set `NEXT_PUBLIC_USE_MOCK_API=false` in `.env.developm
 1. Set `NEXT_PUBLIC_USE_MOCK_API=false` in `.env.development.local` (your machine only).
 2. Configure private server settings from `.env.example`; the proxy is implemented in
    `app/api/[...path]/route.js`, with a separate P6 gateway under `app/api/advance/`.
-3. Restart `npm run dev`.
+3. Restart `bun run dev`.
 
 Mock handlers are disabled in production. Set `NEXT_PUBLIC_USE_MOCK_API=false` before
 building so browser helpers use real routes.
@@ -86,16 +94,17 @@ login, `/api` proxy. Other members add their screens under `app/(app)/…`.
 
 | Command | Does |
 |---|---|
-| `npm run dev` | Dev server on http://localhost:3000 |
-| `npm run build` / `npm start` | Production build / serve it |
-| `npm run lint` | ESLint (Next.js rules) |
-| `npm run test:p6` | P6 gateway and recovery checks against a controlled local provider |
-| `npm run test:p6:e2e` | P6 browser checks against a running local preview |
-| `npm run test:p6:live` | Opt-in person-assisted dev check; see [Development](docs/DEVELOPMENT.md#live-confirmation-check) |
-| `npm run rabbitmq:up` | Start RabbitMQ + tunnel (Docker), see `infra/rabbitmq/README.md` |
-| `npm run rabbitmq:url` | Print the tunnel URL / `RabbitHost` value |
-| `npm run rabbitmq:status` | Container status |
-| `npm run rabbitmq:down` | Stop RabbitMQ + tunnel |
+| `bun run dev` | Dev server on http://localhost:3000 |
+| `bun run build` / `bun run start` | Production build / serve it |
+| `bun run lint` | ESLint (Next.js rules) |
+| `bun run test:env` | Bun/Next environment-selection and override checks |
+| `bun run test:p6` | P6 gateway and recovery checks against a controlled local provider |
+| `bun run test:p6:e2e` | P6 browser checks against a running local preview |
+| `bun run test:p6:live` | Opt-in person-assisted dev check; see [Development](docs/DEVELOPMENT.md#live-confirmation-check) |
+| `bun run rabbitmq:up` | Start RabbitMQ + tunnel (Docker), see `infra/rabbitmq/README.md` |
+| `bun run rabbitmq:url` | Print the tunnel URL / `RabbitHost` value |
+| `bun run rabbitmq:status` | Container status |
+| `bun run rabbitmq:down` | Stop RabbitMQ + tunnel |
 
 RabbitMQ is **only** needed when testing notifications against the OutSystems backend.
 You don't need it to view the frontend.

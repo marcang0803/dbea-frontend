@@ -2,6 +2,9 @@
 
 ## Start with the current code
 
+Use the Bun version recorded in `package.json` and install with
+`bun install --frozen-lockfile`. Commit dependency changes to `bun.lock`.
+
 Read [AGENTS.md](../AGENTS.md), [Architecture](ARCHITECTURE.md) and
 [Development](DEVELOPMENT.md). Consult the installed Next.js documentation for
 the feature being changed. This project uses JavaScript and the `@/` root alias.
@@ -41,12 +44,13 @@ need a concrete review of the affected records and actions before execution.
 Run checks relevant to the change and record the actual results:
 
 ```sh
-npm run lint
-npm run test:p6
-npm run build
+bun run lint
+bun run test:env
+bun run test:p6
+bun run build
 ```
 
-For UI changes, run `npm run test:p6:e2e` against the local preview and inspect
+For UI changes, run `bun run test:p6:e2e` against the local preview and inspect
 desktop and phone rendering. Add meaningful regression coverage for changed
 behavior; documentation-only changes need link/content checks rather than a
 bank test or a new application build.
