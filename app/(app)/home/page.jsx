@@ -129,6 +129,24 @@ export default function HomePage() {
         <span aria-hidden="true" className="text-slate-400">→</span>
       </Link>
 
+      {/* P5 advance offer and repayment schedule */}
+      <section className="mt-4 grid grid-cols-2 gap-3">
+        <Link
+          href="/advance/offer"
+          className="rounded-2xl border border-emerald-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-400 hover:shadow-md"
+        >
+          <span className="block font-semibold text-slate-900">Advance offer</span>
+          <span className="mt-1 block text-sm leading-5 text-slate-500">See your score and compare plans</span>
+        </Link>
+        <Link
+          href="/advance/me"
+          className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md"
+        >
+          <span className="block font-semibold text-slate-900">My Advance</span>
+          <span className="mt-1 block text-sm leading-5 text-slate-500">View instalments and repayments</span>
+        </Link>
+      </section>
+
       {warnings.length > 0 && (
         <p className="mt-5 rounded-2xl border border-amber-200/70 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
           Some details couldn&apos;t be loaded right now. Your balance is up to date.
