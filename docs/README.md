@@ -15,7 +15,9 @@ to run the app and [Architecture](ARCHITECTURE.md) to understand its boundaries.
 | [P3 proxy routes](p3-proxy-routes.md) | Account, notification and OTP API contracts |
 | [RabbitMQ setup](../infra/rabbitmq/README.md) | Optional notification infrastructure |
 
-Status as of **7 November 2026**: the P6 browser checks and live blocked-response
-recovery test pass. Successful loan funding and normal monthly repayments with
-interest remain unverified. Read the changelog before treating a test result as
-evidence of an enabled banking feature.
+Status as of **8 November 2026**: P6 implements Alan's approval-then-deposit
+workaround in OutSystems; see the [banking boundary](ARCHITECTURE.md#current-banking-boundary). Publication and
+actual funded borrowing remain separate verification steps. Normal monthly
+collection is deliberately disabled because the bank batch is not running;
+early repayment would require a separate quote including penalties. Earlier
+live blocked-response evidence does not establish successful funding.

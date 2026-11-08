@@ -1,12 +1,25 @@
 import { defineConfig } from '@playwright/test';
 
+const externalPreview = Boolean(process.env.P6_E2E_BASE_URL);
 const baseURL = process.env.P6_E2E_BASE_URL || 'http://127.0.0.1:3086';
 const target = new URL(baseURL);
-if (!['127.0.0.1', 'localhost', '[::1]'].includes(target.hostname)) {
+if (!['http:', 'https:'].includes(target.protocol) || !['127.0.0.1', 'localhost', '[::1]'].includes(target.hostname) ||
+  target.username || target.password || target.pathname !== '/' || target.search || target.hash) {
   throw new Error('These P6 tests are restricted to a local frontend preview.');
 }
 
 export default defineConfig({
+  // An explicit base URL opts into an already-running local app. Otherwise the
+  // test runner owns this preview and stops its process tree after the run.
+  webServer: externalPreview ? undefined : {
+    command: 'bun run build && bun run start --hostname 127.0.0.1 --port 3086',
+    url: baseURL,
+    env: { P6_E2E_BUILD: '1', P6_FRONTEND_ORIGIN: target.origin },
+    reuseExistingServer: false,
+    timeout: 180_000,
+    stdout: 'ignore',
+    stderr: 'pipe',
+  },
   testDir: './tests/browser',
   timeout: 60_000,
   expect: { timeout: 10_000 },

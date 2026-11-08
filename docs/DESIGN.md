@@ -44,10 +44,21 @@ centered panel rather than stretching a paragraph across the full desktop width.
 - Format visible currency to two decimal places while retaining source precision
   for backend comparisons. Do not derive a new bank plan from rounded UI values.
 - Label total repayment as a quote until the bank confirms the applicable terms.
+- Keep the teaching-bank limitation documented: monthly collection is disabled
+  and early repayment may include a bank penalty. Acceptance has no monthly-processing notice.
 - Do not invent a funded date, repayment schedule, current accrued interest or final payoff.
 - Treat changes to amount/tenor as requiring another terms check.
+- Offer cards must match the returned amount and tenor before selection and
+  handoff. Show the returned maximum rather than a hardcoded band allowance.
+- Check the authenticated user's active advances before permitting a new
+  borrowing journey. Use customer wording, never internal error-code labels.
+- Keep score, band and indicative plans visible for active borrowers. Label
+  matching terms as reference information and block application handoff.
+- Keep the requested amount and term visible when eligibility returns different
+  terms. Explain both and require an explicit choice of the returned offer
+  before enabling the bank details/SMS step; do not silently replace inputs.
 - Enable confirmation only for complete, supported terms: a positive amount up
-  to S$1,000 in whole cents, within the returned maximum, a term of 1–6 months,
+  to S$1,000 in whole cents, within the returned maximum, a term of 3, 6 or 12 months,
   positive monthly instalment, nonnegative interest and a real calendar maturity
   date. These are gateway limits; the backend still determines eligibility.
 - Identify a loan in the UI using a limited reference, such as its last four characters.
@@ -64,6 +75,7 @@ centered panel rather than stretching a paragraph across the full desktop width.
 | Received/pending | Stable request reference and owner status recovery |
 | Unknown or invisible status | Preserve the reference; do not encourage another financial POST |
 | Product 205 contract pending | Borrowing temporarily unavailable with a clear explanation |
+| Deposit outcome unknown | Explain that the approved loan's deposit needs checking; retain its reference and offer status recovery, with no new submission or cancellation |
 | Completed | Require backend `COMPLETED`, a positive advance ID and a loan reference |
 | Canceled | Explain that the request was canceled before bank submission |
 | Declined | Explain the unsuccessful decision and allow another review where supported |
@@ -71,6 +83,12 @@ centered panel rather than stretching a paragraph across the full desktop width.
 An earlier active request is an account-level conflict. Resume or cancel that
 request before creating another intent. A success-colored card or completion
 animation must not appear for a quote, pending approval or unconfirmed funding.
+
+When a user deliberately selects a new offer, P6 checks any saved request
+reference before reusing it. A confirmed finished request may leave the tab's
+recovery state so the new plan can be reviewed. Missing, incomplete or uncertain
+results retain the original reference. This handoff does not determine whether
+the user qualifies for another advance and never submits a loan automatically.
 
 ## OTP interaction
 
@@ -84,6 +102,11 @@ and prevents closing while submission is in flight. Wrong-code retries retain
 the same request key and challenge. After verification has been attempted, P6
 disables resend until the pending request is handled, because C9 binds that
 intent to its challenge.
+
+Existing approved-loan recovery instead uses a fresh challenge bound to
+`ADVANCE-FUND-{OperationId}`. It shows the original loan terms and permits resend
+for that recovery challenge; an uncertain funding result closes confirmation
+and requires another status check before continuing.
 
 P6 supplies a native modal boundary around the shared component.
 Background controls are inert while it is open; Tab stays in the dialog and

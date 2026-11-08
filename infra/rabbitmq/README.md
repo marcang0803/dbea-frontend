@@ -14,15 +14,15 @@ OutSystems (SMU cloud) → SMULab_RabbitMQ wrapper → https://<random>.trycloud
 
 ## Prerequisites
 - Docker Desktop (Windows/macOS) or Docker Engine + Compose (Linux)
-- Node.js (already needed for the frontend) for `npm run rabbitmq:url`
+- Bun 1.4.3 and Node.js (already needed for the frontend) for the project commands
 - Nothing else. The Cloudflare Quick Tunnel needs no account.
 
 ## Start (≈1 minute, from the repo root)
 ```bash
 cp infra/rabbitmq/.env.example infra/rabbitmq/.env   # first time only; then set a long random password in it
-npm run rabbitmq:up           # = docker compose -f infra/rabbitmq/docker-compose.yml up -d
-npm run rabbitmq:status       # rabbitmq should be "healthy", tunnel "running"
-npm run rabbitmq:url          # prints the tunnel URL + RabbitHost value (works on Windows/macOS/Linux)
+bun run rabbitmq:up           # = docker compose -f infra/rabbitmq/docker-compose.yml up -d
+bun run rabbitmq:status       # rabbitmq should be "healthy", tunnel "running"
+bun run rabbitmq:url          # prints the tunnel URL + RabbitHost value (works on Windows/macOS/Linux)
 ```
 On Windows PowerShell, use `copy` instead of `cp` for the first line.
 The script prints something like:
@@ -47,15 +47,15 @@ Then:
 
 ## Stop
 1. **First** set `UseRabbitMQ = False` in Service Center. Otherwise events published while the broker is down are logged and dropped.
-2. `npm run rabbitmq:down`. Queues and messages are kept in the `rabbitmq-data` volume. To wipe everything: `docker compose -f infra/rabbitmq/docker-compose.yml down -v`.
+2. `bun run rabbitmq:down`. Queues and messages are kept in the `rabbitmq-data` volume. To wipe everything: `docker compose -f infra/rabbitmq/docker-compose.yml down -v`.
 
 > **The tunnel URL changes every time the `tunnel` container restarts.** After each
-> `npm run rabbitmq:up`, re-run `npm run rabbitmq:url` and update `RabbitHost`. Site Property
+> `bun run rabbitmq:up`, re-run `bun run rabbitmq:url` and update `RabbitHost`. Site Property
 > changes apply without republishing.
 
 ## Demo day checklist
-- [ ] Laptop on, Docker running, `npm run rabbitmq:up`
-- [ ] `npm run rabbitmq:url` → update `RabbitHost`
+- [ ] Laptop on, Docker running, `bun run rabbitmq:up`
+- [ ] `bun run rabbitmq:url` → update `RabbitHost`
 - [ ] GetBindings on Swagger shows `notify.#` (screenshot for the appendix)
 - [ ] `UseRabbitMQ = True`
 - [ ] Laptop set not to sleep during the presentation

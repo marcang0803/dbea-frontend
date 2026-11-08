@@ -1,0 +1,2 @@
+# Next.js owns environment-file loading and mode-specific precedence.
+env = false

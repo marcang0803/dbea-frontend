@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { ApiError, isSessionExpired } from '@/lib/p3Api';
 import { formatMoney } from '@/lib/format';
 import { getAdvanceUserId, normalizeBand, p5Api } from '@/lib/p5Api';
+import { normalizeAdvanceRecords } from '@/lib/p5AdvanceState.mjs';
 
 function asList(data) {
   if (Array.isArray(data)) return data;
@@ -97,20 +98,15 @@ export default function MyAdvancePage() {
             502,
           );
         }
-        setScoreSummary(data);
-        setAdvances(
-          items.map((advance) => ({
-            ...advance,
-            repayments: asList(advance.repayments) || [],
-          })),
-        );
+        setAdvances(normalizeAdvanceRecords(items));
+        setScoreSummary(data?.latestScore !== undefined || data?.latestBand ? data : null);
       } catch (err) {
         if (err?.name === 'AbortError') return;
         if (isSessionExpired(err)) {
           router.replace('/login?next=/advance/me');
           return;
         }
-        setError(err instanceof ApiError ? err.message : 'Could not load your advance schedule.');
+        setError(err instanceof Error ? err.message : 'Could not load your advance schedule.');
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }

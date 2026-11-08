@@ -3,11 +3,14 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
-import { ApiError, isSessionExpired } from '@/lib/p3Api';
+import { ApiError, isSessionExpired, USE_MOCK_API } from '@/lib/p3Api';
 import { formatMoney } from '@/lib/format';
 import { getAdvanceContext, normalizeBand, p5Api } from '@/lib/p5Api';
+import { p6Api } from '@/lib/p6Api';
+import { ADVANCE_TERMS } from '@/lib/advanceTerms.mjs';
+import { isSelectablePlan } from '@/lib/p5AdvanceState.mjs';
 
-const PLAN_TENORS = [3, 6, 12];
+const PLAN_TENORS = ADVANCE_TERMS;
 const DEFAULT_REQUESTED_AMOUNT = 500;
 
 function scoreReasons(value) {
@@ -70,8 +73,10 @@ export default function AdvanceOfferPage() {
   const [checkingPlans, setCheckingPlans] = useState(false);
   const [error, setError] = useState('');
   const [amountError, setAmountError] = useState('');
+  const [maximumAmount, setMaximumAmount] = useState(null);
+  const [hasActiveAdvance, setHasActiveAdvance] = useState(null);
 
-  const loadPlans = useCallback(async (advanceContext, scoreSnapshot, amount) => {
+  const loadPlans = useCallback(async (advanceContext, scoreSnapshot, amount, signal) => {
     const snapshotId = scoreSnapshot?.id ?? scoreSnapshot?.snapshotId;
 
     if (snapshotId == null) {
@@ -87,7 +92,7 @@ export default function AdvanceOfferPage() {
             requestedAmount: amount,
             selectedTenorMonths: tenor,
             snapshotId,
-          });
+          }, { signal });
           return { tenor, data };
         } catch (planError) {
           if (planError?.name === 'AbortError') throw planError;
@@ -98,8 +103,13 @@ export default function AdvanceOfferPage() {
     );
 
     setPlans(results);
+    const maxima = results.filter(plan => plan.data?.isEligible && plan.data.selectedTenor === plan.tenor)
+      .map(plan => plan.data.maxAdvanceAmount).filter(value => Number.isFinite(value) && value > 0);
+    const maximum = maxima.length ? Math.max(...maxima) : null;
+    setMaximumAmount(maximum);
+    setAmountError(maximum !== null && amount > maximum ? `Your current maximum is ${formatMoney(maximum)}. Enter an amount within this limit.` : '');
     setSelectedTenor(
-      results.find((plan) => plan.data?.isEligible)?.tenor ?? null,
+      results.find((plan) => isSelectablePlan(plan, amount))?.tenor ?? null,
     );
   }, []);
 
@@ -111,6 +121,10 @@ export default function AdvanceOfferPage() {
         const advanceContext = await getAdvanceContext({
           signal: controller.signal,
         });
+        if (!USE_MOCK_API) {
+          const availability = await p6Api.getActiveAdvances({ signal: controller.signal });
+          setHasActiveAdvance(availability.hasActiveAdvance);
+        }
         const { data: score } = await p5Api.createScoreSnapshot(
           advanceContext.userId,
           advanceContext.tBankAccountId,
@@ -118,7 +132,7 @@ export default function AdvanceOfferPage() {
         );
         setContext(advanceContext);
         setSnapshot(score);
-        await loadPlans(advanceContext, score, DEFAULT_REQUESTED_AMOUNT);
+        await loadPlans(advanceContext, score, DEFAULT_REQUESTED_AMOUNT, controller.signal);
       } catch (err) {
         if (err?.name === 'AbortError') return;
         if (isSessionExpired(err)) {
@@ -141,6 +155,14 @@ export default function AdvanceOfferPage() {
 
     if (!Number.isFinite(amount) || amount <= 0) {
       setAmountError('Enter an amount greater than S$0.');
+      return;
+    }
+    if (Number(amount.toFixed(2)) !== amount) {
+      setAmountError('Enter an amount with no more than two decimal places.');
+      return;
+    }
+    if (maximumAmount !== null && amount > maximumAmount) {
+      setAmountError(`Your current maximum is ${formatMoney(maximumAmount)}. Enter an amount within this limit.`);
       return;
     }
 
@@ -168,11 +190,11 @@ export default function AdvanceOfferPage() {
   const chosenPlan = plans.find((plan) => plan.tenor === selectedTenor);
   const snapshotId = snapshot?.id ?? snapshot?.snapshotId;
   const confirmHref =
-    chosenPlan?.data && snapshotId != null
+    !USE_MOCK_API && hasActiveAdvance === false && !checkingPlans && !amountError && isSelectablePlan(chosenPlan, requestedAmount) && snapshotId != null
       ? `/advance/confirm?${new URLSearchParams({
-          amount: String(chosenPlan.data.selectedPlanAmount ?? requestedAmount),
-          months: String(chosenPlan.data.selectedTenor ?? chosenPlan.tenor),
-          snapshotId: String(snapshotId),
+          amount: String(chosenPlan.data.selectedPlanAmount),
+          months: String(chosenPlan.data.selectedTenor),
+          snapshotId: String(chosenPlan.data.outSnapshotId),
         }).toString()}`
       : '';
 
@@ -209,6 +231,14 @@ export default function AdvanceOfferPage() {
         </div>
       ) : (
         <>
+        {hasActiveAdvance && (
+        <section role="status" className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+          <h2 className="font-semibold text-amber-950">You already have an active advance</h2>
+          <p className="mt-2 text-sm leading-6 text-amber-800">You can still review your score, band and indicative terms below. Another advance cannot be requested while your current advance remains active.</p>
+          <Link href="/advance/me" className="mt-4 inline-block font-semibold text-emerald-800 underline">View your current advance</Link>
+        </section>
+        )}
+          {USE_MOCK_API && <p role="status" className="mt-5 rounded-xl bg-amber-50 p-4 text-sm text-amber-900">These are preview offers. Switch to real API mode to continue to borrowing.</p>}
           <section className="mt-6 rounded-[1.75rem] bg-gradient-to-br from-emerald-700 to-teal-900 p-6 text-white shadow-lg">
             <p className="text-sm font-medium text-emerald-100">Your latest score</p>
             <div className="mt-2 flex items-end justify-between gap-4">
@@ -259,8 +289,13 @@ export default function AdvanceOfferPage() {
                   min="1"
                   step="0.01"
                   inputMode="decimal"
+                  disabled={checkingPlans}
                   value={requestedAmount}
-                  onChange={(event) => setRequestedAmount(event.target.value)}
+                  onChange={(event) => {
+                    setRequestedAmount(event.target.value);
+                    setSelectedTenor(null);
+                    setAmountError(maximumAmount !== null && Number(event.target.value) > maximumAmount ? `Your current maximum is ${formatMoney(maximumAmount)}. Enter an amount within this limit.` : '');
+                  }}
                   aria-describedby={amountError ? 'advance-amount-error' : undefined}
                   className="min-w-0 flex-1 rounded-xl border border-slate-300 px-3 py-2.5 text-slate-900 focus-visible:ring-2 focus-visible:ring-emerald-600"
                 />
@@ -273,13 +308,14 @@ export default function AdvanceOfferPage() {
                 </button>
               </div>
               {amountError && <p id="advance-amount-error" className="mt-2 text-sm text-red-700">{amountError}</p>}
+              {maximumAmount !== null && <p className="mt-2 text-xs text-slate-500">Your current maximum: {formatMoney(maximumAmount)}.</p>}
             </form>
 
             <div className="mt-3 space-y-3">
               {plans.map((plan) => {
                 const result = plan.data;
-                const eligible = Boolean(result?.isEligible);
-                const selected = plan.tenor === selectedTenor;
+                const eligible = isSelectablePlan(plan, requestedAmount);
+                const selected = !hasActiveAdvance && plan.tenor === selectedTenor;
                 return (
                   <article
                     key={plan.tenor}
@@ -301,7 +337,7 @@ export default function AdvanceOfferPage() {
                             ? 'bg-emerald-50 text-emerald-700'
                             : 'bg-slate-100 text-slate-600'
                       }`}>
-                        {plan.error ? 'Unavailable' : eligible ? 'Eligible' : 'Not eligible'}
+                        {plan.error ? 'Unavailable' : eligible ? hasActiveAdvance ? 'For reference' : 'Eligible' : 'Not eligible'}
                       </span>
                     </div>
 
@@ -309,6 +345,8 @@ export default function AdvanceOfferPage() {
                       <p role="status" className="mt-3 text-sm text-red-700">{plan.error}</p>
                     ) : result ? (
                       <>
+                        {result.isEligible && result.selectedTenor !== plan.tenor && <p className="mt-3 text-sm text-amber-800">The eligibility service returned {result.selectedTenor} months. This {plan.tenor}-month plan is unavailable.</p>}
+                        {result.isEligible && result.selectedPlanAmount !== Number(requestedAmount) && <p className="mt-3 text-sm text-amber-800">The returned amount is {formatMoney(result.selectedPlanAmount)}. Update your request before continuing.</p>}
                         <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
                           <div>
                             <dt className="text-slate-500">Monthly instalment</dt>
@@ -333,7 +371,7 @@ export default function AdvanceOfferPage() {
                             <dd className="mt-1 font-medium text-slate-900">{formatDate(result.maturityDate)}</dd>
                           </div>
                         </dl>
-                        {eligible && (
+                        {eligible && !hasActiveAdvance && (
                           <button
                             type="button"
                             onClick={() => setSelectedTenor(plan.tenor)}
