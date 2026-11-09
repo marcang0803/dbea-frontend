@@ -96,17 +96,16 @@ export default function RateAlertsPage() {
     setError('');
     setSuccess('');
 
-    await p4Api.createAlert({
+    try {
+      await p4Api.createAlert({
         corridor,
         targetRate: numericTargetRate,
-    });
+      });
 
-    setTargetRate('');
-    setSuccess('Your target-rate alert has been created.');
-
-    try {
-      const {data: list} = await p4Api.listAlerts();
-      setAlerts(normalizeAlerts(list));
+      const { data } = await p4Api.listAlerts();
+      setAlerts(normalizeAlerts(data));
+      setTargetRate('');
+      setSuccess('Your target-rate alert has been created.');
     } catch (err) {
       if (isSessionExpired(err)) {
         router.replace('/login?next=/rates/alerts');
