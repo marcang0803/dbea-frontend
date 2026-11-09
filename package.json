@@ -11,6 +11,8 @@
     "lint": "eslint",
     "test:env": "node --test tests/bun-env.test.mjs",
     "test:p5": "node --test tests/p5-state.test.mjs",
+    "test:p5:bank-history": "node --test tests/p5-bank-history-checks.test.mjs",
+    "test:p5:bank-history:backend": "node --env-file=.env.local scripts/run-p5-bank-history-checks.mjs",
     "test:p6": "node --test tests/p6-gateway.test.mjs",
     "test:p6:repayments": "node --test tests/p6-repayment-harness.test.mjs",
     "test:p6:repayments:backend": "node --env-file=.env.local scripts/run-p6-repayment-harness.mjs",

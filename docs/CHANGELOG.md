@@ -28,6 +28,12 @@ deployment or OutSystems publication.
 
 ### Changed
 
+- P5 scoring switches from manually entered `RemittanceHistory` rows to the
+  linked user's tBank ledger after separate native publication. It counts
+  recognised outgoing remittance principal, supports explicitly labelled
+  `DEMO REMITTANCE` Teller debits, and excludes fees, deposits and loan funding.
+  The existing score formula and policy limits remain unchanged. Native
+  classification checks and deployment steps are documented in P5 bank scoring.
 - P5 offer cards now require matching returned terms, explain current amount
   limits, and prevent stale selections from reaching confirmation. A verified
   active advance shows a warning while score, band and indicative plan browsing

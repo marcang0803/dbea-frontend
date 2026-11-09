@@ -94,6 +94,8 @@ enforces its own authorization, OTP, funding and product checks.
 | `bun run test:env` | Four isolated Bun/Next environment-precedence checks using synthetic files |
 | `bun run build` | Production compilation; currently uses webpack |
 | `bun run test:p5` | Stable live/mock record IDs and exact offer-selection contracts |
+| `bun run test:p5:bank-history` | Local HTTP/report checks for the bank-scoring native runner |
+| `bun run test:p5:bank-history:backend` | Native bank-transaction classification cases after separate publication; no bank or database writes |
 | `bun run test:p6` | Gateway and recovery checks against a controlled local HTTP provider |
 | `bun run test:p6:repayments` | Local HTTP checks for the native harness runner, including cleanup evidence and no retries |
 | `bun run test:p6:repayments:backend` | Actual native posting/fixture cases after separate CS publication |

@@ -108,6 +108,9 @@ An existing `requestKey` instead resumes that request's status recovery. The
 acceptance screen does not replace the offer or My Advance dashboard.
 
 P5 owns `/advance/offer` and `/advance/me`, now included from the P5 branch.
+After the bank-history scoring publication, Score AS calculates from Core Lib's
+owner-scoped tBank evidence reader instead of the manual remittance table.
+See [P5 bank scoring](P5_SCORING.md) for transaction rules and deployment steps.
 The offer page hands its query parameters to `/advance/confirm`, a P6 entry point
 that reuses `/advance/accept`. P6 supports a direct Home entry and the query
 parameters above so its acceptance page can be checked independently. P6's

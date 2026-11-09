@@ -7,6 +7,7 @@ to run the app and [Architecture](ARCHITECTURE.md) to understand its boundaries.
 | --- | --- |
 | [Architecture](ARCHITECTURE.md) | Application structure, service integration, identity and request recovery |
 | [Development](DEVELOPMENT.md) | Local configuration, commands, browser tests and troubleshooting |
+| [P5 bank scoring](P5_SCORING.md) | Bank transaction classification, Teller demo data, publication and native checks |
 | [Contributing](CONTRIBUTING.md) | Change workflow, review expectations and validation |
 | [Design](DESIGN.md) | Responsive layout, visual language, accessibility and financial states |
 | [Changelog](CHANGELOG.md) | Unreleased changes and dated verification notes |
