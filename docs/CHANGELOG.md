@@ -64,6 +64,12 @@ deployment or OutSystems publication.
 
 ### Fixed
 
+- P5 native score APIs preserve calculated zero values instead of omitting them
+  from JSON. The Core salary lookup recognises incoming `SALARY` and
+  `Monthly Salary` credits without case sensitivity, selects the latest valid
+  SGD credit and searches a rolling six-month window across transaction pages.
+  These changes require separate OutSystems publication. Scoring weights,
+  band thresholds and eligibility limits are unchanged.
 - The P6 browser-test command now builds and manages an isolated port-3086
   preview automatically, avoiding connection-refused failures when only the
   normal port-3000 app is running. An explicit local base URL retains manual mode.

@@ -164,6 +164,8 @@ No test results are automatically uploaded to Postman or GitHub.
 | `ACCEPTANCE_IN_PROGRESS` | Resume or cancel the earlier request; do not generate repeated acceptance attempts |
 | Active-advance warning | Existing ACTIVE records block another loan. Check My Advance; frontend changes cannot settle or reset the loan |
 | My Advance has no score summary | The frontend omits ScoreCS summaries because their ownership is not established; use the score flow on Advance offer |
+| Advance offer shows “—” for a zero score | Publish the Score AS/CS change to send default JSON values. A missing field remains unavailable; the frontend must not invent a zero score |
+| Remittance evidence exists but the score is zero | Check salary evidence on the linked bank account. The Core salary lookup recognises incoming positive SGD credits labelled `SALARY` or `Monthly Salary` (ignoring case and surrounding spaces), selects the latest within six months and reads subsequent transaction pages. The current formula is average monthly remittance divided by salary × 100; remittance history alone does not grant eligibility |
 | A status GET returns 404 | Keep the request reference; absence of a visible record does not prove that an uncertain POST never executed |
 | An acceptance or cancellation response cannot be confirmed | Keep the request reference and use Check request status; do not start another advance |
 | A cancellation conflict returns a newer version or reconciliation flag | The UI adopts that state; check status before further action |

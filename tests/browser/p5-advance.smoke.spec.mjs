@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 // Entirely controlled browser responses: no account, score, SMS or bank writes.
-async function installApi(page, { active = false, activeUnavailable = false, clamp = true, termCaps = false, records } = {}) {
+async function installApi(page, { active = false, activeUnavailable = false, clamp = true, termCaps = false, records, score = 60, band = 'Band B', eligible = true, omitScore = false } = {}) {
   const calls = [];
   await page.route('**/api/**', async route => {
     const url = new URL(route.request().url());
@@ -15,12 +15,14 @@ async function installApi(page, { active = false, activeUnavailable = false, cla
       status = activeUnavailable ? 503 : 200;
       data = activeUnavailable ? null : { hasActiveAdvance: active };
       errors = activeUnavailable ? [{ code: 'ACTIVE_ADVANCE_LOOKUP_UNAVAILABLE', message: 'Your existing advances could not be checked. Please try again before applying.' }] : [];
-    } else if (url.pathname === '/api/score') data = { id: 66, userId: 51, score: 60, band: 'Band B', factorBreakdown: 'AvgRemit:600', createdOn: '2026-11-08' };
+    } else if (url.pathname === '/api/score') {
+      data = { id: 66, userId: 51, ...(omitScore ? {} : { score }), band, factorBreakdown: 'AvgRemit:600', createdOn: '2026-11-08' };
+    }
     else if (['/api/eligibility', '/api/advance/eligibility'].includes(url.pathname)) {
       const amount = Number(url.searchParams.get('RequestedAmount') || url.searchParams.get('amount'));
       const requestedTerm = Number(url.searchParams.get('SelectedTenorMonths') || url.searchParams.get('months'));
       const months = clamp ? 3 : requestedTerm;
-      data = { isEligible: true, isSnapshotValid: true, outSnapshotId: 66, selectedPlanAmount: Math.min(amount, 500), selectedTenor: months, monthlyInstalment: (Math.min(amount, 500) + 3) / months, interest: 3, interestRate: 0.0477, approvedBand: 'Band B', maxAdvanceAmount: 500, maturityDate: '2027-02-08', acceptanceAvailable: true };
+      data = { isEligible: eligible, isSnapshotValid: true, outSnapshotId: 66, selectedPlanAmount: eligible ? Math.min(amount, 500) : 0, selectedTenor: eligible ? months : 0, monthlyInstalment: eligible ? (Math.min(amount, 500) + 3) / months : 0, interest: eligible ? 3 : 0, interestRate: eligible ? 0.0477 : 0, approvedBand: band, maxAdvanceAmount: eligible ? 500 : 0, maturityDate: eligible ? '2027-02-08' : '', acceptanceAvailable: true };
       if (termCaps && requestedTerm === 3) data = { ...data, selectedPlanAmount: Math.min(amount, 200), maxAdvanceAmount: 200 };
     } else if (url.pathname === '/api/advance/records') data = { advances: records ?? [{ id: 14, userId: 51, amount: 100, tenorMonths: 1, monthlyInstalment: 100.4, status: 'ACTIVE', nextDueDate: '2026-12-07', loanAccountId: '0000006826', repayments: [] }] };
     else { status = 501; errors = [{ message: `Unexpected test route ${url.pathname}` }]; }
@@ -28,6 +30,29 @@ async function installApi(page, { active = false, activeUnavailable = false, cla
   });
   return calls;
 }
+
+for (const score of [0, 12]) {
+test(`a returned score of ${score} is visible without granting Band C eligibility`, async ({ page }) => {
+  const calls = await installApi(page, { score, band: 'Band C', eligible: false });
+  await page.goto('/advance/offer');
+  const scoreCard = page.locator('section').filter({ has: page.getByText('Your latest score', { exact: true }) });
+  await expect(scoreCard.getByText(String(score), { exact: true })).toBeVisible();
+  await expect(scoreCard.getByText('Band C', { exact: true })).toBeVisible();
+  await expect(page.getByText('AvgRemit:600', { exact: true })).toBeVisible();
+  await expect(page.getByText('Not eligible', { exact: true })).toHaveCount(3);
+  await expect(page.getByRole('link', { name: 'Continue to confirmation' })).toHaveCount(0);
+  expect(calls.some(call => call.path.includes('/otp/') || call.path.includes('/acceptances'))).toBe(false);
+});
+}
+
+test('a genuinely absent score stays unavailable rather than being invented as zero', async ({ page }) => {
+  await installApi(page, { omitScore: true, band: 'Band C', eligible: false });
+  await page.goto('/advance/offer');
+  const scoreCard = page.locator('section').filter({ has: page.getByText('Your latest score', { exact: true }) });
+  await expect(scoreCard.getByText('—', { exact: true })).toBeVisible();
+  await expect(scoreCard.getByText('0', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Continue to confirmation' })).toHaveCount(0);
+});
 
 test('P5 disables advertised terms when eligibility returns a different term', async ({ page }) => {
   await installApi(page);
