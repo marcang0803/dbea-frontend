@@ -51,5 +51,6 @@ the body through unchanged.
 ## Mock mode (`NEXT_PUBLIC_USE_MOCK_API=true`)
 - Sign-up OTP: `123456` correct, `000000` expired, anything else incorrect. Username `demo` is taken.
 - Family members added or removed on `/family` show up on P2's `/send` screen (shared mock store).
+- Payout countries: PH (PHP), IN (INR), BD (BDT), ID (IDR), MY (MYR), MM (MMK), VN (VND); mock corridor IDs `T3RE_PRD_SGD_<CCY>`.
 - Top up: OTP `123456`; the new balance shows on Home.
 - The P1 mock routes are more specific than `app/api/mock/[...path]`, so Next.js matches them first.
