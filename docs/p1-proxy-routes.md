@@ -12,6 +12,7 @@ Login and logout are P2's (`/login`, `/api/auth/*`).
 | `GET /api/family/beneficiaries` | `GET /T3RE_Sender_CS/rest/Family/beneficiaries` | `Authorization: Bearer <token>` |
 | `POST /api/family/beneficiaries` | `POST /T3RE_Sender_CS/rest/Family/beneficiaries` | `Authorization: Bearer <token>` |
 | `DELETE /api/family/beneficiaries/{id}` | `DELETE /T3RE_Sender_CS/rest/Family/beneficiaries/{id}` | `Authorization: Bearer <token>` |
+| `POST /api/account/topup` | `POST /T3RE_Sender_CS/rest/Account/topup` `{ AmountSGD, RequestId, ChallengeId, OtpCode }` | `Authorization: Bearer <token>` + TOPUP OTP |
 
 Note: the Family API reads `Authorization: Bearer`, **not** the `Token` header.
 
@@ -44,8 +45,11 @@ the body through unchanged.
 | `app/(public)/signup/page.jsx` | Sign-up: details → OTP → done |
 | `app/(app)/family/page.jsx` | Family list + remove |
 | `app/(app)/family/new/page.jsx` | Add family member |
+| `app/(app)/topup/page.jsx` | Top up: amount → TOPUP OTP → tBank DepositCash |
+| `app/api/mock/account/topup/route.js` | Mock top-up (adds to the shared mock balance) |
 
 ## Mock mode (`NEXT_PUBLIC_USE_MOCK_API=true`)
 - Sign-up OTP: `123456` correct, `000000` expired, anything else incorrect. Username `demo` is taken.
 - Family members added or removed on `/family` show up on P2's `/send` screen (shared mock store).
+- Top up: OTP `123456`; the new balance shows on Home.
 - The P1 mock routes are more specific than `app/api/mock/[...path]`, so Next.js matches them first.
