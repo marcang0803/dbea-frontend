@@ -442,8 +442,8 @@ async function handle(request, { params }) {
   // C13 RequestOTP
   if (route === 'POST otp/challenges') {
     const body = await request.json().catch(() => ({}));
-    if (!['SEND', 'LOCK', 'ADVANCE'].includes(body.purpose) || !body.referenceId) {
-      return fail(400, 'INVALID_REQUEST', 'purpose must be SEND, LOCK or ADVANCE, and referenceId is required.');
+    if (!['SEND', 'LOCK', 'ADVANCE', 'TOPUP'].includes(body.purpose) || !body.referenceId) {
+      return fail(400, 'INVALID_REQUEST', 'purpose must be SEND, LOCK, ADVANCE or TOPUP, and referenceId is required.');
     }
     // Only one live code per purpose + reference (same rule as the real service).
     for (const c of store.challenges.values()) {

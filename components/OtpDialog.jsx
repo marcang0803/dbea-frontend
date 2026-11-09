@@ -1,12 +1,12 @@
 'use client';
 
 // Shared OTP confirmation dialog, used by every money action
-// (send money – P2, lock rate – P4, accept advance – P6).
+// (send money – P2, lock rate – P4, accept advance – P6, top up – P1).
 //
 // How a screen uses it:
 //   <OtpDialog
 //     open={showOtp}
-//     purpose="SEND"                    // SEND | LOCK | ADVANCE
+//     purpose="SEND"                    // SEND | LOCK | ADVANCE | TOPUP
 //     referenceId={quoteId}             // the record being confirmed
 //     title="Confirm transfer"
 //     onSubmit={({ challengeId, otpCode }) => sendRemittance(quoteId, challengeId, otpCode)}

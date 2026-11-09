@@ -37,6 +37,11 @@ function routeFor(method, path) {
     return '/T3RE_Notify_CS/rest/Account/summary';
   }
 
+  // P1: top up the user's own SGD account (TOPUP OTP verified server-side)
+  if (method === 'POST' && joined === 'account/topup') {
+    return '/T3RE_Sender_CS/rest/Account/topup';
+  }
+
   if (method === 'GET' && joined === 'notifications') {
     return '/T3RE_Notify_AS/rest/Notification/notifications';
   }
@@ -110,6 +115,16 @@ function routeFor(method, path) {
 
 function backendBody(method, path, body) {
   const joined = path.join('/');
+
+  // P1: top up
+  if (method === 'POST' && joined === 'account/topup') {
+    return {
+      AmountSGD: body?.amountSGD,
+      RequestId: body?.requestId,
+      ChallengeId: body?.challengeId,
+      OtpCode: body?.otpCode,
+    };
+  }
 
   // Remittance quote
   if (method === 'POST' && joined === 'remittance/quotes') {

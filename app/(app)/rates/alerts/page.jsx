@@ -98,12 +98,12 @@ export default function RateAlertsPage() {
 
     try {
       await p4Api.createAlert({
-      corridor,
-      targetRate: numericTargetRate,
-    });
+        corridor,
+        targetRate: numericTargetRate,
+      });
 
-const { data } = await p4Api.listAlerts();
-setAlerts(normalizeAlerts(data));
+      const { data } = await p4Api.listAlerts();
+      setAlerts(normalizeAlerts(data));
       setTargetRate('');
       setSuccess('Your target-rate alert has been created.');
     } catch (err) {
@@ -348,9 +348,9 @@ setAlerts(normalizeAlerts(data));
           </div>
         ) : (
           <div className="mt-4 space-y-3">
-            {alerts.map((alert) => (
+            {alerts.map((alert, index) => (
               <article
-                key={alert.alertId}
+                key={alert.alertId ?? `alert-${index}`}
                 className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
               >
                 <div className="flex items-start justify-between gap-4">

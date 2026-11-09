@@ -109,12 +109,21 @@ export default function HomePage() {
         {summary?.accountId && (
           <p className="mt-1 text-xs text-emerald-100">Account •••{String(summary.accountId).slice(-4)}</p>
         )}
-        <Link
-          href="/send"
-          className="relative mt-7 inline-flex w-full items-center justify-center rounded-2xl bg-white py-3.5 font-semibold text-emerald-800 shadow-sm transition hover:-translate-y-0.5 hover:bg-emerald-50 hover:shadow-md focus-visible:ring-4 focus-visible:ring-white/30"
-        >
-          Send money home
-        </Link>
+        <div className="relative mt-7 grid grid-cols-[1fr_auto] gap-2">
+          <Link
+            href="/send"
+            className="inline-flex items-center justify-center rounded-2xl bg-white py-3.5 font-semibold text-emerald-800 shadow-sm transition hover:-translate-y-0.5 hover:bg-emerald-50 hover:shadow-md focus-visible:ring-4 focus-visible:ring-white/30"
+          >
+            Send money home
+          </Link>
+          {/* Top up (P1) */}
+          <Link
+            href="/topup"
+            className="inline-flex items-center justify-center rounded-2xl border border-white/30 bg-white/10 px-4 py-3.5 font-semibold text-white transition hover:-translate-y-0.5 hover:bg-white/20 focus-visible:ring-4 focus-visible:ring-white/30"
+          >
+            + Top up
+          </Link>
+        </div>
       </section>
 
       {/* My family (P1) */}
