@@ -5,9 +5,10 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import OtpDialog from '@/components/OtpDialog';
 import { p6Api, AdvanceApiError } from '@/lib/p6Api';
-import { acceptanceView, canCancelAcceptance, canDiscardUnsubmittedAcceptance, isAdvanceOperation } from '@/lib/advanceState.mjs';
+import { acceptanceView, canCancelAcceptance, canDiscardUnsubmittedAcceptance, canResumeAcceptanceFunding, isAdvanceOperation, isFinishedAcceptance } from '@/lib/advanceState.mjs';
 import { formatMoney } from '@/lib/format';
 import { advanceReturnPath } from '@/lib/loginReturn.mjs';
+import { ADVANCE_TERMS, isAdvanceTerm } from '@/lib/advanceTerms.mjs';
 
 const STORAGE_KEY = 'remitease:p6:pending-request';
 const INPUT = 'mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/10 disabled:bg-slate-50';
@@ -18,11 +19,22 @@ function remember(key) {
   try { sessionStorage.setItem(STORAGE_KEY, key); } catch { /* The URL also retains the recovery reference. */ }
 }
 
+async function explainActiveAdvance(data) {
+  if (['RECEIVED', 'READY_TO_APPLY'].includes(data.status) && !data.loanAccountId && !Number(data.advanceId) &&
+    !data.needsReconciliation && !data.reconciliationRequired && !data.dispatchOutstanding) {
+    try {
+      const availability = await p6Api.getActiveAdvances();
+      if (availability.hasActiveAdvance) return { ...data, errorCode: 'ACTIVE_ADVANCE_EXISTS' };
+    } catch { /* Preserve the request when its blocking reason cannot be verified. */ }
+  }
+  return data;
+}
+
 function offerValid(offer) {
   return offer?.isEligible === true && offer.isSnapshotValid === true && Number.isSafeInteger(Number(offer.outSnapshotId)) && Number(offer.outSnapshotId) > 0 &&
     Number.isFinite(offer.selectedPlanAmount) && offer.selectedPlanAmount > 0 && offer.selectedPlanAmount <= 1000 && Number(offer.selectedPlanAmount.toFixed(2)) === offer.selectedPlanAmount &&
     Number.isFinite(offer.maxAdvanceAmount) && offer.selectedPlanAmount <= offer.maxAdvanceAmount &&
-    Number.isInteger(offer.selectedTenor) && offer.selectedTenor > 0 && offer.selectedTenor <= 6 &&
+    isAdvanceTerm(offer.selectedTenor) &&
     Number.isFinite(offer.monthlyInstalment) && offer.monthlyInstalment > 0 && Number.isFinite(offer.interest) && offer.interest >= 0 &&
     validDate(offer.maturityDate);
 }
@@ -46,12 +58,13 @@ function Row({ label, children }) {
 export default function AdvanceAcceptance({ initialAmount = '', initialMonths = '', initialSnapshotId = '', initialRequestKey = '' }) {
   const router = useRouter();
   const [amount, setAmount] = useState(initialAmount || '100');
-  const [months, setMonths] = useState(initialMonths || '2');
+  const [months, setMonths] = useState(isAdvanceTerm(Number(initialMonths)) ? String(Number(initialMonths)) : String(ADVANCE_TERMS[0]));
   const [offer, setOffer] = useState(null);
+  const [hasActiveAdvance, setHasActiveAdvance] = useState(false);
   const [operation, setOperation] = useState(null);
   const [requestReference, setRequestReference] = useState(initialRequestKey);
   const [busy, setBusy] = useState(Boolean(initialRequestKey));
-  const [error, setError] = useState('');
+  const [error, setError] = useState(initialMonths && !initialRequestKey && !isAdvanceTerm(Number(initialMonths)) ? 'That repayment term is no longer offered. Choose 3, 6 or 12 months.' : '');
   const [showOtp, setShowOtp] = useState(false);
   const [otpAttempted, setOtpAttempted] = useState(false);
   const [residenceStatus, setResidenceStatus] = useState('');
@@ -61,11 +74,21 @@ export default function AdvanceAcceptance({ initialAmount = '', initialMonths = 
   const keyRef = useRef(initialRequestKey);
   const submitting = useRef(false);
   const otpModalRef = useRef(null);
+  const otpTriggerRef = useRef(null);
+  const fundingMode = canResumeAcceptanceFunding(operation);
+
+  const adoptReference = useCallback((key) => {
+    keyRef.current = key;
+    setRequestReference(key);
+    remember(key);
+    window.history.replaceState(null, '', `/advance/accept?requestKey=${encodeURIComponent(key)}`);
+  }, []);
 
   // P6 owns this modal boundary; the shared OTP component remains unchanged.
   useEffect(() => {
     const dialog = otpModalRef.current;
     if (showOtp) dialog.showModal();
+    else if (otpTriggerRef.current?.isConnected) otpTriggerRef.current.focus();
     return () => { if (dialog.open) dialog.close(); };
   }, [showOtp]);
 
@@ -73,24 +96,42 @@ export default function AdvanceAcceptance({ initialAmount = '', initialMonths = 
     router.replace(`/login?next=${encodeURIComponent(next)}`);
   }, [router]);
 
-  const recover = useCallback(async (key) => {
+  const recover = useCallback(async (key, reviewNewOffer = false) => {
     try {
-      const data = await p6Api.getStatus(key);
+      let data = await p6Api.getStatus(key);
+      if (reviewNewOffer && isFinishedAcceptance(data)) {
+        // A deliberate offer handoff can leave a finished receipt. Never release
+        // a missing, incomplete or unresolved request to create a new intent.
+        try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* The URL still contains the new offer. */ }
+        keyRef.current = ''; setRequestReference(''); setOperation(null); setError('');
+        return;
+      }
+      data = await explainActiveAdvance(data);
       keyRef.current = key;
       setRequestReference(key);
-      setOperation((previous) => ({ ...data, errorCode: data.errorCode || (data.status === 'RECEIVED' ? previous?.errorCode : '') }));
+      setOperation((previous) => ({ ...data, errorCode: data.errorCode || (data.status === 'RECEIVED' && previous?.errorCode !== 'ACTIVE_ADVANCE_EXISTS' ? previous?.errorCode : '') }));
       setError('');
     } catch (err) {
       if (err.status === 401) { login(advanceReturnPath({ requestKey: key })); return; }
       if (err.status === 404) {
+        try {
+          const current = await explainActiveAdvance(await p6Api.getCurrent());
+          if (isAdvanceOperation(current) && typeof current.requestKey === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/.test(current.requestKey)) {
+            adoptReference(current.requestKey);
+            setOperation(current); setError('');
+            return;
+          }
+        } catch (activeError) {
+          if (activeError.status === 401) { login(advanceReturnPath({ requestKey: key })); return; }
+          // A missing active lookup never proves a submitted request is safe to repeat.
+        }
         setOperation((previous) => ({ ...previous, status: 'UNKNOWN', errorCode: 'REQUEST_NOT_VISIBLE' }));
-        setError('');
         return;
       }
       setOperation((previous) => isAdvanceOperation(err.data) ? err.data : previous || { status: 'UNKNOWN' });
       setError(err.message || 'Could not check this request.');
     } finally { setBusy(false); }
-  }, [login]);
+  }, [login, adoptReference]);
 
   useEffect(() => {
     let active = true;
@@ -102,11 +143,11 @@ export default function AdvanceAcceptance({ initialAmount = '', initialMonths = 
         keyRef.current = key;
         setRequestReference(key);
         setBusy(true);
-        recover(key);
+        recover(key, !initialRequestKey && Boolean(initialAmount && initialMonths));
       }
     });
     return () => { active = false; };
-  }, [initialRequestKey, recover]);
+  }, [initialRequestKey, initialAmount, initialMonths, recover]);
 
   function clearOffer() { setOffer(null); setError(''); setAgreed(false); }
 
@@ -116,9 +157,11 @@ export default function AdvanceAcceptance({ initialAmount = '', initialMonths = 
     submitting.current = true;
     setBusy(true); setError(''); setOffer(null); setAgreed(false);
     try {
+      const availability = await p6Api.getActiveAdvances();
+      setHasActiveAdvance(availability.hasActiveAdvance);
+      if (availability.hasActiveAdvance) return;
       const data = await p6Api.getOffer({ amount, months, snapshotId: initialSnapshotId });
       setOffer(data);
-      if (offerValid(data)) { setAmount(String(data.selectedPlanAmount)); setMonths(String(data.selectedTenor)); }
     } catch (err) {
       if (err.status === 401) login(advanceReturnPath({ amount, months, snapshotId: initialSnapshotId }));
       else setError(err.message || 'Could not check your terms.');
@@ -127,7 +170,7 @@ export default function AdvanceAcceptance({ initialAmount = '', initialMonths = 
 
   async function confirm({ challengeId, otpCode }) {
     if (submitting.current) return;
-    if (!offerValid(offer) || !offer.acceptanceAvailable) {
+    if (!offerValid(offer) || offerAdjusted || hasActiveAdvance || !offer.acceptanceAvailable || !factsValid || !agreed) {
       throw new AdvanceApiError('Your offer has changed. Close this confirmation and check your terms again.', 400);
     }
     submitting.current = true;
@@ -143,6 +186,13 @@ export default function AdvanceAcceptance({ initialAmount = '', initialMonths = 
       const data = await p6Api.accept({ amount: offer.selectedPlanAmount, months: offer.selectedTenor, snapshotId: String(offer.outSnapshotId), challengeId, otpCode, residenceStatus, yearsAtResidence: Number(years), numberOfCreditCards: Number(cards) }, key);
       setOperation(data); setShowOtp(false); setError('');
     } catch (err) {
+      if (err.status === 409 && ['ACCEPTANCE_IN_PROGRESS', 'RECONCILIATION_REQUIRED'].includes(err.code) &&
+        isAdvanceOperation(err.data) && typeof err.data.requestKey === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/.test(err.data.requestKey)) {
+        adoptReference(err.data.requestKey);
+        setOperation({ ...err.data, errorCode: '' });
+        setShowOtp(false); setError('');
+        return;
+      }
       if (canDiscardUnsubmittedAcceptance(err.data, hasPreviousAttempt)) {
         // A new reference may be released only with proxy proof that no C9 POST
         // was attempted. A 404, backend refusal or lost response is insufficient.
@@ -163,6 +213,42 @@ export default function AdvanceAcceptance({ initialAmount = '', initialMonths = 
       setOperation(isAdvanceOperation(err.data) ? err.data : { status: 'UNKNOWN', errorCode: err.code });
       setError(err.message || 'Check your request status before trying again.');
       if (err.status === 401) login(advanceReturnPath({ requestKey: key }));
+    } finally { submitting.current = false; }
+  }
+
+  async function openAdvanceConfirmation(event) {
+    if (submitting.current || !factsValid || !agreed || !offerValid(offer) || offerAdjusted) return;
+    otpTriggerRef.current = event.currentTarget;
+    submitting.current = true; setBusy(true); setError('');
+    try {
+      const availability = await p6Api.getActiveAdvances();
+      setHasActiveAdvance(availability.hasActiveAdvance);
+      if (availability.hasActiveAdvance) { setOffer(null); setAgreed(false); }
+      else setShowOtp(true);
+    } catch (err) {
+      if (err.status === 401) login(advanceReturnPath({ amount, months, snapshotId: initialSnapshotId }));
+      else setError(err.message || 'Your existing advances could not be checked. Please try again.');
+    } finally { submitting.current = false; setBusy(false); }
+  }
+
+  async function confirmFunding({ challengeId, otpCode }) {
+    if (submitting.current || !fundingMode) return;
+    submitting.current = true;
+    try {
+      const data = await p6Api.resumeFunding(operation.operationId, { expectedVersion: operation.version, challengeId, otpCode });
+      setOperation(data); setShowOtp(false); setError('');
+    } catch (err) {
+      if (err.status === 422) {
+        if (isAdvanceOperation(err.data) && Number(err.data.operationId) === Number(operation.operationId)) {
+          setOperation(previous => ({ ...previous, version: err.data.version, status: err.data.status }));
+        }
+        throw err;
+      }
+      if (isAdvanceOperation(err.data)) setOperation(previous => ({ ...previous, ...err.data }));
+      setShowOtp(false);
+      setOperation(previous => ({ ...previous, canResumeFunding: false }));
+      setError(err.message || 'Check the existing request before continuing.');
+      if (err.status === 401) login(advanceReturnPath({ requestKey: keyRef.current }));
     } finally { submitting.current = false; }
   }
 
@@ -188,6 +274,7 @@ export default function AdvanceAcceptance({ initialAmount = '', initialMonths = 
 
   const view = acceptanceView(operation);
   const valid = offerValid(offer);
+  const offerAdjusted = valid && (Number(amount) !== offer.selectedPlanAmount || Number(months) !== offer.selectedTenor);
   const factsValid = residenceStatus && /^\d+$/.test(years) && Number(years) <= 120 && /^\d+$/.test(cards) && Number(cards) <= 100;
 
   function closeOtp() {
@@ -220,6 +307,7 @@ export default function AdvanceAcceptance({ initialAmount = '', initialMonths = 
         })}
       </ol>
 
+
       {view ? (
         <section aria-live="polite" className="mx-auto mt-8 max-w-3xl rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm sm:p-10">
           <div className={`mb-5 grid h-12 w-12 place-items-center rounded-2xl text-xl ${view.tone === 'success' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-50 text-amber-700'}`} aria-hidden="true">{view.tone === 'success' ? '✓' : '◷'}</div>
@@ -227,9 +315,22 @@ export default function AdvanceAcceptance({ initialAmount = '', initialMonths = 
           <p className="mt-3 text-sm leading-6 text-slate-600">{view.message}</p>
           {operation.loanAccountId && <p className="mt-4 text-sm text-slate-500">Loan account ending {String(operation.loanAccountId).slice(-4)}</p>}
           {requestReference && <p className="mt-4 break-all rounded-xl bg-slate-50 p-3 text-xs text-slate-500">Request reference: {requestReference}</p>}
+          {fundingMode && <div className="mt-5 rounded-xl border border-emerald-100 p-4 text-sm">
+            <h3 className="font-semibold text-slate-900">Original loan terms</h3>
+            <dl className="mt-2 divide-y divide-slate-100">
+              <Row label="Loan amount">{formatMoney(operation.originalAmount)}</Row>
+              <Row label="Repayment term">{operation.originalMonths} months</Row>
+              <Row label="Monthly instalment">{formatMoney(operation.originalMonthlyInstalment)}</Row>
+              <Row label="Total interest">{formatMoney(operation.originalTotalInterest)}</Row>
+              <Row label="Maturity date">{dateLabel(operation.originalMaturityDate)}</Row>
+            </dl>
+            <p className="mt-3 text-xs leading-5 text-slate-500">These are the existing bank loan’s terms. Continuing funding keeps its original repayment dates.</p>
+            <button type="button" disabled={busy} onClick={(event) => { otpTriggerRef.current = event.currentTarget; setShowOtp(true); }} className={`${PRIMARY} mt-4`}>Confirm funding with SMS code</button>
+          </div>}
           {view.tone === 'pending' && <button type="button" disabled={busy} onClick={() => { setBusy(true); recover(keyRef.current); }} className={`${PRIMARY} mt-5`}>{busy ? 'Checking…' : 'Check request status'}</button>}
+          {operation.errorCode === 'ACTIVE_ADVANCE_EXISTS' && <Link href="/advance/me" className="mt-4 block text-center text-sm font-semibold text-emerald-700 underline">View your current advance</Link>}
           {canCancelAcceptance(operation) && <button type="button" disabled={busy} onClick={cancel} className={`${SECONDARY} mt-3 w-full`}>Cancel this request</button>}
-          {['CANCELED', 'DECLINED', 'NOT_SUBMITTED'].includes(operation.status) && <button type="button" onClick={reset} className={`${SECONDARY} mt-5 w-full`}>{operation.status === 'NOT_SUBMITTED' ? 'Return to review' : 'Review another offer'}</button>}
+          {(operation.status === 'NOT_SUBMITTED' || isFinishedAcceptance(operation) && operation.status !== 'COMPLETED') && <button type="button" onClick={reset} className={`${SECONDARY} mt-5 w-full`}>{operation.status === 'NOT_SUBMITTED' ? 'Return to review' : 'Review another offer'}</button>}
           <Link href="/home" className="mt-5 block text-center text-sm font-semibold text-emerald-700 hover:underline">Return home</Link>
         </section>
       ) : (
@@ -241,13 +342,18 @@ export default function AdvanceAcceptance({ initialAmount = '', initialMonths = 
             <label htmlFor="advance-amount" className="text-sm font-medium text-slate-700">How much do you need? <span className="text-slate-400">SGD</span></label>
             <input id="advance-amount" className={INPUT} type="number" inputMode="decimal" min="0.01" max="1000" step="0.01" required value={amount} disabled={busy} onChange={(event) => { setAmount(event.target.value); clearOffer(); }} />
             <label htmlFor="advance-months" className="mt-5 block text-sm font-medium text-slate-700">Repayment term</label>
-            <select id="advance-months" className={INPUT} value={months} disabled={busy} onChange={(event) => { setMonths(event.target.value); clearOffer(); }}>{[1, 2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n} {n === 1 ? 'month' : 'months'}</option>)}</select>
-            <p className="mt-3 text-xs leading-5 text-slate-400">Your approved amount and term depend on your eligibility. Checking terms does not create a loan.</p>
+            <select id="advance-months" className={INPUT} value={months} disabled={busy} onChange={(event) => { setMonths(event.target.value); clearOffer(); }}>{ADVANCE_TERMS.map((n) => <option key={n} value={n}>{n} months</option>)}</select>
+            <p className="mt-3 text-xs leading-5 text-slate-400">Reviewing your offer won’t borrow money. Borrowing requires a separate SMS confirmation and bank approval.</p>
             <button type="submit" disabled={busy} className={`${PRIMARY} mt-5`}>{busy ? 'Checking your terms…' : offer ? 'Refresh terms' : 'Check my terms'}</button>
           </form>
           </section>
 
           <aside className="min-w-0 space-y-5 lg:sticky lg:top-8" aria-label="Your advance terms">
+          {hasActiveAdvance && <section role="status" className="rounded-2xl border border-amber-200 bg-amber-50 p-5 sm:p-7">
+            <h2 className="font-semibold text-amber-950">You already have an active advance</h2>
+            <p className="mt-2 text-sm leading-6 text-amber-800">You cannot apply for another advance while it remains active.</p>
+            <Link href="/advance/me" className="mt-4 inline-block text-sm font-semibold text-emerald-800 underline">View your current advance</Link>
+          </section>}
           {!offer && <section className="hidden rounded-[1.75rem] border border-emerald-100 bg-gradient-to-br from-emerald-50 to-white p-8 lg:block">
             <span className="mb-6 grid h-12 w-12 place-items-center rounded-2xl bg-white text-emerald-700 shadow-sm" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-6 w-6"><path strokeLinecap="round" strokeLinejoin="round" d="M8 3h8l3 3v15H5V3h3Zm0 6h8M8 13h8M8 17h5" /></svg></span>
             <h2 className="text-xl font-semibold tracking-tight text-slate-900">{busy ? 'Checking your terms…' : 'Your terms, in one place'}</h2>
@@ -257,10 +363,16 @@ export default function AdvanceAcceptance({ initialAmount = '', initialMonths = 
               <div><dt className="font-medium text-slate-700">Interest and total repayment</dt><dd className="mt-1 text-slate-500">The quoted cost before you make a decision.</dd></div>
               <div><dt className="font-medium text-slate-700">Repayment term</dt><dd className="mt-1 text-slate-500">Your approved term and maturity date.</dd></div>
             </dl>
-            <p className="mt-7 text-xs leading-5 text-emerald-800">Checking terms does not create a loan.</p>
+            <p className="mt-7 text-xs leading-5 text-emerald-800">Reviewing your offer won’t borrow money. You’ll confirm separately with an SMS code.</p>
           </section>}
 
           {offer && !valid && <section role="status" className="rounded-2xl border border-amber-200 bg-amber-50 p-5 sm:p-7"><h2 className="font-semibold text-amber-950">No advance available right now</h2><p className="mt-2 text-sm leading-6 text-amber-800">{offer.isEligible ? 'We could not confirm a valid repayment plan. Check your terms again.' : 'This account does not currently qualify for an advance. You can check again after your account information changes.'}</p></section>}
+
+          {offerAdjusted && <section role="status" className="rounded-2xl border border-amber-200 bg-amber-50 p-5 sm:p-7">
+            <h2 className="font-semibold text-amber-950">Your available offer differs</h2>
+            <p className="mt-2 text-sm leading-6 text-amber-800">You requested {formatMoney(Number(amount))} over {months} months. Based on your current eligibility, the returned offer is {formatMoney(offer.selectedPlanAmount)} over {offer.selectedTenor} months. Review this offer below, or change your request and check again.</p>
+            <button type="button" disabled={busy} onClick={() => { setAmount(String(offer.selectedPlanAmount)); setMonths(String(offer.selectedTenor)); setAgreed(false); }} className={`${SECONDARY} mt-4 w-full`}>Review this offer</button>
+          </section>}
 
           {valid && <section className="overflow-hidden rounded-[1.75rem] border border-emerald-200 bg-white shadow-sm" aria-live="polite">
             <div className="relative overflow-hidden bg-gradient-to-br from-emerald-700 to-teal-900 p-6 text-white sm:p-8">
@@ -275,22 +387,22 @@ export default function AdvanceAcceptance({ initialAmount = '', initialMonths = 
               <Row label="Quoted total repayment">{formatMoney(offer.selectedPlanAmount + offer.interest)}</Row>
               <Row label="Maturity date">{dateLabel(offer.maturityDate)}</Row>
             </dl>
-            <p className="px-5 pb-5 text-xs leading-5 text-slate-400 sm:px-8 sm:pb-7">Amounts are shown to two decimal places. The final instalment follows the bank’s confirmed balance.</p>
+            <p className="px-5 pb-5 text-xs leading-5 text-slate-400 sm:px-8 sm:pb-7">Quoted amounts are shown to two decimal places. An early repayment needs a separate bank quote, including any penalty.</p>
           </section>}
 
-          {valid && !offer.acceptanceAvailable && <section role="status" className="rounded-2xl border border-amber-200 bg-amber-50 p-5 sm:p-7"><h2 className="font-semibold text-amber-950">Borrowing temporarily unavailable</h2><p className="mt-2 text-sm leading-6 text-amber-800">You can review your terms, but we are still verifying bank funding and repayments. No loan has been created from this offer.</p><button type="button" disabled className={`${PRIMARY} mt-4`}>Confirmation unavailable</button></section>}
+          {valid && !offer.acceptanceAvailable && <section role="status" className="rounded-2xl border border-amber-200 bg-amber-50 p-5 sm:p-7"><h2 className="font-semibold text-amber-950">Borrowing temporarily unavailable</h2><p className="mt-2 text-sm leading-6 text-amber-800">Confirmation is not enabled for this environment. You can review your terms. No loan has been created from this offer.</p><button type="button" disabled className={`${PRIMARY} mt-4`}>Confirmation unavailable</button></section>}
 
-          {valid && offer.acceptanceAvailable && <section className="rounded-[1.75rem] border border-slate-200 bg-white p-5 sm:p-7">
+          {valid && !offerAdjusted && offer.acceptanceAvailable && <section className="rounded-[1.75rem] border border-slate-200 bg-white p-5 sm:p-7">
             <h2 className="text-lg font-semibold text-slate-950">A few details for the bank</h2>
             <p className="mt-2 text-sm leading-6 text-slate-500">The bank will check your request again. Your advance is confirmed only after funding is verified.</p>
             <label htmlFor="advance-residence" className="mt-4 block text-sm font-medium text-slate-700">Residence status</label>
-            <select id="advance-residence" className={INPUT} value={residenceStatus} onChange={(event) => setResidenceStatus(event.target.value)}><option value="">Select your residence status</option><option value="Owned">Owned</option><option value="Rent">Rented</option></select>
+            <select id="advance-residence" className={INPUT} value={residenceStatus} disabled={busy} onChange={(event) => setResidenceStatus(event.target.value)}><option value="">Select your residence status</option><option value="Owned">Owned</option><option value="Rent">Rented</option></select>
             <label htmlFor="advance-years" className="mt-4 block text-sm font-medium text-slate-700">Years at this address</label>
-            <input id="advance-years" className={INPUT} type="number" inputMode="numeric" min="0" max="120" step="1" value={years} onChange={(event) => setYears(event.target.value)} />
+            <input id="advance-years" className={INPUT} type="number" inputMode="numeric" min="0" max="120" step="1" value={years} disabled={busy} onChange={(event) => setYears(event.target.value)} />
             <label htmlFor="advance-cards" className="mt-4 block text-sm font-medium text-slate-700">Number of credit cards</label>
-            <input id="advance-cards" className={INPUT} type="number" inputMode="numeric" min="0" max="100" step="1" value={cards} onChange={(event) => setCards(event.target.value)} />
-            <label className="mt-5 flex items-start gap-3 text-sm leading-6 text-slate-600"><input type="checkbox" checked={agreed} onChange={(event) => setAgreed(event.target.checked)} className="mt-1 h-4 w-4 accent-emerald-700" />I have reviewed this offer and my details are accurate.</label>
-            <button type="button" disabled={!factsValid || !agreed || busy} onClick={() => setShowOtp(true)} className={`${PRIMARY} mt-5`}>Continue with SMS code</button>
+            <input id="advance-cards" className={INPUT} type="number" inputMode="numeric" min="0" max="100" step="1" value={cards} disabled={busy} onChange={(event) => setCards(event.target.value)} />
+            <label className="mt-5 flex items-start gap-3 text-sm leading-6 text-slate-600"><input type="checkbox" checked={agreed} disabled={busy} onChange={(event) => setAgreed(event.target.checked)} className="mt-1 h-4 w-4 accent-emerald-700" />I have reviewed this offer and my details are accurate.</label>
+            <button type="button" disabled={!factsValid || !agreed || busy} onClick={openAdvanceConfirmation} className={`${PRIMARY} mt-5`}>Continue with SMS code</button>
           </section>}
           </aside>
         </div>
@@ -298,7 +410,7 @@ export default function AdvanceAcceptance({ initialAmount = '', initialMonths = 
 
       {error && <p role="alert" className="mt-5 rounded-2xl border border-red-100 bg-red-50 p-4 text-sm leading-6 text-red-700">{error}</p>}
       <dialog ref={otpModalRef} role="presentation" className="m-0 h-dvh max-h-none w-screen max-w-none border-0 bg-transparent p-0 backdrop:bg-transparent" onKeyDown={containOtpFocus} onCancel={(event) => { event.preventDefault(); if (!submitting.current) closeOtp(); }}>
-        <OtpDialog open={showOtp} purpose="ADVANCE" referenceId={String(offer?.outSnapshotId || '')} title="Confirm your advance" description="Enter the code for this advance offer." confirmLabel="Confirm advance" requestChallenge={p6Api.requestOtp} resendAllowed={!otpAttempted} onSubmit={confirm} onClose={closeOtp} />
+        <OtpDialog open={showOtp} purpose="ADVANCE" referenceId={fundingMode ? operation.fundingOtpReference : String(offer?.outSnapshotId || '')} title={fundingMode ? 'Confirm loan funding' : 'Confirm your advance'} description={fundingMode ? 'Enter the new code to continue funding your existing approved loan on its original terms.' : 'Enter the code for this advance offer.'} confirmLabel={fundingMode ? 'Confirm funding' : 'Confirm advance'} requestChallenge={p6Api.requestOtp} resendAllowed={fundingMode || !otpAttempted} onSubmit={fundingMode ? confirmFunding : confirm} onClose={closeOtp} />
       </dialog>
     </main>
   );

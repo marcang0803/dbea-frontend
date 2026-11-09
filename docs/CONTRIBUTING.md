@@ -2,6 +2,9 @@
 
 ## Start with the current code
 
+Use the Bun version recorded in `package.json` and install with
+`bun install --frozen-lockfile`. Commit dependency changes to `bun.lock`.
+
 Read [AGENTS.md](../AGENTS.md), [Architecture](ARCHITECTURE.md) and
 [Development](DEVELOPMENT.md). Consult the installed Next.js documentation for
 the feature being changed. This project uses JavaScript and the `@/` root alias.
@@ -41,21 +44,23 @@ need a concrete review of the affected records and actions before execution.
 Run checks relevant to the change and record the actual results:
 
 ```sh
-npm run lint
-npm run test:p6
-npm run build
+bun run lint
+bun run test:env
+bun run test:p5
+bun run test:p6
+bun run build
 ```
 
-For UI changes, run `npm run test:p6:e2e` against the local preview and inspect
+For UI changes, run `bun run test:p6:e2e` (it manages its own local preview) and inspect
 desktop and phone rendering. Add meaningful regression coverage for changed
 behavior; documentation-only changes need link/content checks rather than a
 bank test or a new application build.
 
-The opt-in live test requires a person for login and SMS confirmation. Use a
-dedicated approved dev fixture, cancel earlier undispatched test requests and
-record whether the run reached a real bank operation. A passing blocked-path
-test does not establish funded borrowing or interest collection. Do not put the
-live confirmation command into unattended CI.
+The opt-in live test is a person-assisted offer review and blocks P6/OTP
+mutations. Actual borrowing tests need separate authorization for a dedicated
+fixture. Record whether any bank operation occurred; controlled browser checks do not
+establish a real repayment or bank servicing. Do not put an interactive test into
+unattended CI.
 
 Never commit `.env.local`, passwords, API keys, authentication state, OTPs or
 private test artifacts. Redact screenshots before adding them to a PR.
