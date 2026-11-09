@@ -8,7 +8,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { ApiError, isSessionExpired } from '@/lib/p3Api';
-import { GENDERS, PAYOUT_COUNTRIES, RELATIONSHIPS, p1Api } from '@/lib/p1Api';
+import { GENDERS, PAYOUT_COUNTRIES, RELATIONSHIPS, p1Api, payoutOptionsFor } from '@/lib/p1Api';
 
 const EMPTY = {
   givenName: '',
@@ -69,19 +69,17 @@ export default function AddFamilyPage() {
 
   const toLogin = useCallback(() => router.replace('/login'), [router]);
 
-  // Payout options for the chosen country. If the backend has no COUNTRY attribute yet and
-  // returns nothing for the filter, fall back to all options.
+  // Payout options for the chosen country only. The backend filters by ?country=; the
+  // frontend filters again (by country, or by payout currency when COUNTRY is missing),
+  // so another country's corridor can never be picked.
   // State is only set inside the promise callbacks (after the network call).
   const loadOptions = useCallback(
     (country, signal) =>
       p1Api
         .getPayoutOptions(country, { signal })
-        .then(({ data }) =>
-          Array.isArray(data) && data.length > 0 ? data : p1Api.getPayoutOptions('', { signal }).then((r) => r.data),
-        )
         .then(
-          (data) => {
-            const list = Array.isArray(data) ? data : [];
+          ({ data }) => {
+            const list = payoutOptionsFor(data, country);
             setOptions(list);
             setForm((f) => ({
               ...f,
@@ -214,7 +212,7 @@ export default function AddFamilyPage() {
             <Field label="Country">
               <select value={form.country} onChange={set('country')} className={inputClass(false)}>
                 {PAYOUT_COUNTRIES.map((c) => (
-                  <option key={c.code} value={c.code}>{c.label}</option>
+                  <option key={c.code} value={c.code}>{c.label} ({c.currency})</option>
                 ))}
               </select>
             </Field>
@@ -225,13 +223,19 @@ export default function AddFamilyPage() {
                 disabled={optionsLoading || options.length === 0}
                 className={`${inputClass(fieldErrors.corridorProductId)} disabled:bg-slate-100`}
               >
-                <option value="">{optionsLoading ? 'Loading…' : options.length ? 'Select' : 'None available'}</option>
+                <option value="">{optionsLoading ? 'Loading…' : options.length ? 'Select' : 'Not available yet'}</option>
                 {options.map((o) => (
                   <option key={o.corridorProductId} value={o.corridorProductId}>{optionLabel(o)}</option>
                 ))}
               </select>
             </Field>
           </div>
+          {!optionsLoading && options.length === 0 && (
+            <p role="status" className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              Payouts to {PAYOUT_COUNTRIES.find((c) => c.code === form.country)?.label ?? 'this country'} aren&apos;t
+              available yet. Please choose another country.
+            </p>
+          )}
           <Field label="Bank account number" error={fieldErrors.accountId}>
             <input value={form.accountId} onChange={digitsOnly('accountId')} inputMode="numeric" className={`${inputClass(fieldErrors.accountId)} font-mono`} />
           </Field>

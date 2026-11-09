@@ -185,11 +185,17 @@ async function handle(request, { params }) {
       return fail(422, 'INSUFFICIENT_FUNDS', 'This amount is more than your available balance.');
     }
 
-    const marketRate = 43.12;
-    const customerRate = 42.53;
+    // Mock-only reference rates (1 SGD = x), so non-PHP family members get sensible numbers.
+    // PHP keeps the original values. Real rates come from the backend in live mode.
+    const MOCK_MARKET_RATES = { PHP: 43.12, INR: 64.5, BDT: 89.9, IDR: 12050, MYR: 3.45, MMK: 1610, VND: 19250 };
+    const marketRate = MOCK_MARKET_RATES[beneficiary.payoutCurrency] ?? 43.12;
+    const customerRate = beneficiary.payoutCurrency === 'PHP' || !MOCK_MARKET_RATES[beneficiary.payoutCurrency]
+      ? 42.53
+      : Number((marketRate * 0.9863).toFixed(4));
+    const bankRate = beneficiary.payoutCurrency === 'PHP' ? 42.1 : Number((marketRate * 0.9763).toFixed(4));
     const fee = 2.5;
     const recipientAmount = Number(((amountSGD - fee) * customerRate).toFixed(2));
-    const bankRecipientAmount = Number(((amountSGD - 8) * 42.1).toFixed(2));
+    const bankRecipientAmount = Number(((amountSGD - 8) * bankRate).toFixed(2));
     const quote = {
       quoteId: store.nextQuoteId++,
       beneficiaryLinkId: beneficiary.id,
