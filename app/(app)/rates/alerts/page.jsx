@@ -97,12 +97,13 @@ export default function RateAlertsPage() {
     setSuccess('');
 
     try {
-      const { data } = await p4Api.createAlert({
-        corridor,
-        targetRate: numericTargetRate,
-      });
+      await p4Api.createAlert({
+      corridor,
+      targetRate: numericTargetRate,
+    });
 
-      setAlerts((current) => [data, ...current]);
+const { data } = await p4Api.listAlerts();
+setAlerts(normalizeAlerts(data));
       setTargetRate('');
       setSuccess('Your target-rate alert has been created.');
     } catch (err) {
