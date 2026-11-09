@@ -3,10 +3,42 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { announceNotificationsChanged, ApiError, isSessionExpired } from '@/lib/p3Api';
+import {
+  announceNotificationsChanged,
+  ApiError,
+  isSessionExpired,
+  p3Api,
+} from '@/lib/p3Api';
 import { p2Api } from '@/lib/p2Api';
-import { loadCachedQuote } from '@/lib/p2QuoteCache';
+import { loadCachedQuote, saveCachedQuote } from '@/lib/p2QuoteCache';
 import { formatDateTime, formatMoney } from '@/lib/format';
+
+const RECEIPT_STATUSES = new Set(['COMPLETED', 'SENT', 'DEBITED', 'FEE_REVIEW']);
+
+function normalizeStatus(value) {
+  return String(value ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/^\d+\s+/, '');
+}
+
+function buildReceipt(quote, recentRemittance, quoteId) {
+  const status = normalizeStatus(recentRemittance.status);
+
+  return {
+    ...quote,
+    quoteId: quote.quoteId ?? recentRemittance.id ?? Number(quoteId),
+    sent: RECEIPT_STATUSES.has(status),
+    status,
+    amountSGD: recentRemittance.amountSGD,
+    recipientAmount: quote.recipientAmount ?? recentRemittance.recipientAmount,
+    completedOn: recentRemittance.createdOn,
+    beneficiary: {
+      nickname: recentRemittance.nickname || 'Recipient',
+      payoutCurrency: recentRemittance.payoutCurrency || 'PHP',
+    },
+  };
+}
 
 function ReceiptRow({ label, children, strong = false }) {
   return (
@@ -37,13 +69,26 @@ export default function TransferReceipt({ quoteId }) {
       return () => clearTimeout(timer);
     }
     const controller = new AbortController();
-    p2Api.getQuote(quoteId, { signal: controller.signal }).then(
-      ({ data }) => {
-        if (!data.sent) {
-          setError('This transfer has not been completed yet.');
+    Promise.all([
+      p2Api.getQuote(quoteId, { signal: controller.signal }),
+      p3Api.getAccountSummary({ signal: controller.signal }),
+    ]).then(
+      ([{ data: quote }, { data: summary }]) => {
+        const recentRemittance = (summary.recentRemittances ?? []).find((item) =>
+          String(item.id ?? item.quoteId ?? item.remittanceId) === String(quoteId),
+        );
+
+        if (!recentRemittance) {
+          setError('This completed transfer is not available in your recent sends.');
         } else {
-          setReceipt(data);
-          announceNotificationsChanged();
+          const mergedReceipt = buildReceipt(quote, recentRemittance, quoteId);
+          if (!mergedReceipt.sent) {
+            setError('This transfer has not been completed yet.');
+          } else {
+            setReceipt(mergedReceipt);
+            saveCachedQuote(mergedReceipt);
+            announceNotificationsChanged();
+          }
         }
         setLoading(false);
       },
@@ -82,7 +127,11 @@ export default function TransferReceipt({ quoteId }) {
     );
   }
 
-  const underReview = receipt.status === 'FEE_REVIEW';
+  const underReview = ['DEBITED', 'FEE_REVIEW'].includes(normalizeStatus(receipt.status));
+  const beneficiary = receipt.beneficiary ?? {};
+  const nickname = beneficiary.nickname || 'Recipient';
+  const payoutCurrency = beneficiary.payoutCurrency || 'PHP';
+  const customerRate = Number(receipt.customerRate);
 
   return (
     <main className="mx-auto max-w-md px-5 pb-12 pt-10">
@@ -102,9 +151,9 @@ export default function TransferReceipt({ quoteId }) {
         <p className="mt-2 text-sm text-slate-500">
           {underReview
             ? 'The recipient transfer succeeded. We are reviewing the fee transaction.'
-            : `${receipt.beneficiary.nickname} will receive ${formatMoney(
+            : `${nickname} will receive ${formatMoney(
                 receipt.recipientAmount,
-                receipt.beneficiary.payoutCurrency,
+                payoutCurrency,
               )}.`}
         </p>
       </header>
@@ -115,18 +164,24 @@ export default function TransferReceipt({ quoteId }) {
           <p className="mt-1 font-mono text-sm font-medium text-slate-900">REMIT-{receipt.quoteId}</p>
         </div>
         <dl className="divide-y divide-slate-100 px-5">
-          <ReceiptRow label="Recipient" strong>{receipt.beneficiary.nickname}</ReceiptRow>
+          <ReceiptRow label="Recipient" strong>{nickname}</ReceiptRow>
           <ReceiptRow label="You sent">{formatMoney(receipt.amountSGD)}</ReceiptRow>
           <ReceiptRow label="Fee">{formatMoney(receipt.fee)}</ReceiptRow>
           <ReceiptRow label="Recipient gets" strong>
-            {formatMoney(receipt.recipientAmount, receipt.beneficiary.payoutCurrency)}
+            {formatMoney(receipt.recipientAmount, payoutCurrency)}
           </ReceiptRow>
           <ReceiptRow label="Exchange rate">
-            S$1 = {Number(receipt.customerRate).toFixed(4)} {receipt.beneficiary.payoutCurrency}
+            {Number.isFinite(customerRate) ? `S$1 = ${customerRate.toFixed(4)} ${payoutCurrency}` : '—'}
           </ReceiptRow>
-          <ReceiptRow label="Bank transaction">{receipt.tBankTxnId}</ReceiptRow>
-          <ReceiptRow label="Completed">{formatDateTime(receipt.completedOn)}</ReceiptRow>
-          <ReceiptRow label="Balance after">{formatMoney(receipt.balanceAfter)}</ReceiptRow>
+          {receipt.tBankTxnId ? (
+            <ReceiptRow label="Bank transaction">{receipt.tBankTxnId}</ReceiptRow>
+          ) : null}
+          {receipt.completedOn ? (
+            <ReceiptRow label="Completed">{formatDateTime(receipt.completedOn)}</ReceiptRow>
+          ) : null}
+          {receipt.balanceAfter != null ? (
+            <ReceiptRow label="Balance after">{formatMoney(receipt.balanceAfter)}</ReceiptRow>
+          ) : null}
         </dl>
       </section>
 
