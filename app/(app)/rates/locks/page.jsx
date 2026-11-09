@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { p2Api } from '@/lib/p2Api';
 import { p4Api } from '@/lib/p4Api';
 import { ApiError, isSessionExpired } from '@/lib/p3Api';
+import { formatRate } from '@/lib/corridors';
 import { formatMoney } from '@/lib/format';
 
 function formatDate(value) {
@@ -255,7 +256,7 @@ export default function RateLocksPage() {
             );
 
             const currency =
-              beneficiary?.payoutCurrency || 'PHP';
+              lock.quoteCurrency || beneficiary?.payoutCurrency?.trim().toUpperCase() || '';
 
             return (
               <article
@@ -271,8 +272,7 @@ export default function RateLocksPage() {
 
                       <p className="mt-1 text-2xl font-semibold tabular-nums">
                         S$1 ={' '}
-                        {Number(lock.lockedRate).toFixed(4)}{' '}
-                        {currency}
+                        {currency ? `${formatRate(lock.lockedRate)} ${currency}` : 'Payout currency unavailable'}
                       </p>
                     </div>
 

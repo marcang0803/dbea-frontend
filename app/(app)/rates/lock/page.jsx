@@ -2,11 +2,12 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import OtpDialog from '@/components/OtpDialog';
 import { p2Api } from '@/lib/p2Api';
 import { p4Api } from '@/lib/p4Api';
 import { ApiError, isSessionExpired } from '@/lib/p3Api';
+import { payoutCurrencyError, formatRate } from '@/lib/corridors';
 import { formatMoney } from '@/lib/format';
 
 const PERIODS = [
@@ -68,6 +69,7 @@ export default function RateLockPage() {
   const [loadingBeneficiaries, setLoadingBeneficiaries] =
     useState(true);
   const [previewing, setPreviewing] = useState(false);
+  const previewRequest = useRef(0);
 
   const [preview, setPreview] = useState(null);
   const [referenceId, setReferenceId] = useState('');
@@ -122,6 +124,8 @@ export default function RateLockPage() {
     [beneficiaries, selectedId],
   );
 
+  const currency = selectedBeneficiary?.payoutCurrency?.trim().toUpperCase() || '';
+  const currencyError = selectedBeneficiary ? payoutCurrencyError(currency) : '';
   const numericAmount = Number(amount);
 
   const amountError = useMemo(() => {
@@ -142,9 +146,12 @@ export default function RateLockPage() {
     Boolean(amount) &&
     Boolean(period) &&
     !amountError &&
+    !currencyError &&
     !previewing;
 
   function clearPreview() {
+    previewRequest.current += 1;
+    setPreviewing(false);
     setPreview(null);
     setReferenceId('');
     setShowOtp(false);
@@ -172,6 +179,7 @@ export default function RateLockPage() {
 
     if (!canPreview) return;
 
+    const requestId = ++previewRequest.current;
     setPreviewing(true);
     setPreview(null);
     setCreatedLock(null);
@@ -185,12 +193,19 @@ export default function RateLockPage() {
         period,
       });
 
+      if (requestId !== previewRequest.current) return;
+      if (!Number.isFinite(Number(data?.forwardRate)) || Number(data.forwardRate) <= 0 ||
+          !Number.isFinite(Number(data?.recipientAmount)) || Number(data.recipientAmount) <= 0 ||
+          !data?.maturityDate || !Number.isFinite(Date.parse(data.maturityDate))) {
+        throw new ApiError('No valid forward quote is available for this currency and period.', 502);
+      }
       setPreview(data);
 
       // This value is no longer than 50 characters and remains unchanged
       // between requesting and verifying the LOCK OTP.
       setReferenceId(crypto.randomUUID());
     } catch (err) {
+      if (requestId !== previewRequest.current) return;
       if (isSessionExpired(err)) {
         router.replace('/login?next=/rates/lock');
         return;
@@ -202,11 +217,14 @@ export default function RateLockPage() {
           : 'Could not retrieve the forward rate.',
       );
     } finally {
-      setPreviewing(false);
+      if (requestId === previewRequest.current) setPreviewing(false);
     }
   }
 
   async function confirmLock({ challengeId, otpCode }) {
+    if (currencyError || !currency || !preview || !referenceId) {
+      throw new ApiError(currencyError || 'Preview a valid rate before confirming.', 400);
+    }
     const { data } = await p4Api.createLock({
       beneficiaryLinkId: Number(selectedId),
       amountSGD: numericAmount,
@@ -272,11 +290,8 @@ export default function RateLockPage() {
 
             <ResultRow label="Locked rate" strong>
               S$1 ={' '}
-              {Number(
-                createdLock.lockedRate ??
-                  preview?.forwardRate,
-              ).toFixed(4)}{' '}
-              {selectedBeneficiary?.payoutCurrency ?? 'PHP'}
+              {formatRate(createdLock.lockedRate ?? preview?.forwardRate)}{' '}
+              {currency}
             </ResultRow>
 
             <ResultRow label="Period">
@@ -527,7 +542,9 @@ export default function RateLockPage() {
         </button>
       </form>
 
-      {preview && (
+      {currencyError && <p role="alert" className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900">{currencyError}</p>}
+
+      {preview && !currencyError && (
         <section className="mt-8 overflow-hidden rounded-[1.75rem] border border-slate-200/80 bg-white shadow-[0_18px_45px_-30px_rgba(15,23,42,0.5)]">
           <div className="relative overflow-hidden bg-gradient-to-br from-emerald-700 to-teal-900 px-6 py-7 text-white">
             <div className="pointer-events-none absolute -right-10 -top-16 h-40 w-40 rounded-full border border-white/10 bg-white/5" />
@@ -537,8 +554,8 @@ export default function RateLockPage() {
             </p>
 
             <p className="mt-1 text-3xl font-semibold tabular-nums">
-              S$1 = {Number(preview.forwardRate).toFixed(4)}{' '}
-              {selectedBeneficiary?.payoutCurrency ?? 'PHP'}
+              S$1 = {formatRate(preview.forwardRate)}{' '}
+              {currency}
             </p>
 
             <p className="mt-2 text-sm text-emerald-100">
@@ -554,7 +571,7 @@ export default function RateLockPage() {
             <ResultRow label="Recipient amount" strong>
               {formatMoney(
                 preview.recipientAmount,
-                selectedBeneficiary?.payoutCurrency ?? 'PHP',
+                currency,
               )}
             </ResultRow>
 

@@ -8,6 +8,11 @@ deployment or OutSystems publication.
 
 ### Added
 
+- P4 frontend corridor selection for seven SGD destinations, currency-aware lock
+  displays, missing-currency handling and INR/VND development fixtures. Live
+  forward-rate checks failed for these destinations; backend changes remain
+  pending. See [P4 verification and scope](P4_CORRIDORS.md).
+
 - Native repayment posting test harness with separate run-scoped fixtures,
   cleanup/rollback verification and a shared posting planner. It tests PAID,
   MISSED and failure boundaries without bank calls or real advance writes.
