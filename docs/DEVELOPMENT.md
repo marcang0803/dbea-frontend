@@ -171,6 +171,7 @@ No test results are automatically uploaded to Postman or GitHub.
 | A cancellation conflict returns a newer version or reconciliation flag | The UI adopts that state; check status before further action |
 | Product 205 returns `INTEREST_REPAYMENT_CONTRACT_PENDING` | The older backend remains deployed; review the P6 OutSystems module version and publication status |
 | `DEMO_FUNDING_RECONCILIATION_REQUIRED` | Keep the original request; reconcile its recorded dispatch against bank evidence without repeating the deposit |
+| `DEMO_FUNDING_NOT_READY` | Check the original request's current bank status. A saved approval response may still say Pending; SendScore eligibility does not establish bank approval. Once the existing bank loan is genuinely Open, check status and use the offered fresh-SMS funding recovery. Do not create another loan or repeat a deposit |
 | `MONTHLY_COLLECTION_UNAVAILABLE` | Expected: the bank's monthly batch is not running; partial/full repayments are early repayments with penalties |
 | OTP cannot look up contact details | Check Sender's PartyId and retrieve that Party profile with the team key; ID equality with UserId is allowed by P1's external-ID convention |
 | Live test times out at login | Use its separate Chrome window; the test window closes when the run ends |

@@ -3,7 +3,7 @@ import http from 'node:http';
 import { once } from 'node:events';
 import test from 'node:test';
 import { createAdvanceGateway } from '../lib/server/advanceGateway.mjs';
-import { acceptanceView, canCancelAcceptance, canDiscardUnsubmittedAcceptance, canResumeAcceptanceFunding } from '../lib/advanceState.mjs';
+import { ADVANCE_MESSAGES, acceptanceView, canCancelAcceptance, canDiscardUnsubmittedAcceptance, canResumeAcceptanceFunding } from '../lib/advanceState.mjs';
 import { safeLoginReturn, advanceReturnPath } from '../lib/loginReturn.mjs';
 
 // Local HTTP provider, not a replacement bank. Shapes are based on the captured
@@ -278,6 +278,18 @@ test('a successful HTTP response or loan reference alone never means funded succ
   assert.equal(canCancelAcceptance({ status: 'RECEIVED', operationId: 6, version: 1, loanAccountId: 'loan' }), false);
   assert.equal(canCancelAcceptance({ status: 'RECEIVED', operationId: 6, version: 1, advanceId: 8 }), false);
   assert.equal(canCancelAcceptance({ status: 'RECONCILE', operationId: 6, version: 1 }), false);
+});
+
+test('a pending bank decision is distinct from approval or an uncertain deposit', () => {
+  const operation = { operationId: 13, version: 9, status: 'APPROVAL_RECORDED', currentBankStatus: 'Pending', loanAccountId: 'test-pending-loan', fundingRecoveryError: 'BANK_APPROVAL_PENDING' };
+  assert.deepEqual(acceptanceView(operation), {
+    title: 'Awaiting bank approval', tone: 'pending', message: ADVANCE_MESSAGES.BANK_APPROVAL_PENDING,
+  });
+  assert.equal(Boolean(canResumeAcceptanceFunding(operation)), false);
+  assert.doesNotMatch(ADVANCE_MESSAGES.DEMO_FUNDING_NOT_READY, /approved loan/i);
+  for (const change of [{ fundingRecorded: true }, { fundingAttempted: true }, { needsReconciliation: true }, { reconciliationRequired: true }, { dispatchOutstanding: true }]) {
+    assert.notEqual(acceptanceView({ ...operation, ...change }).title, 'Awaiting bank approval');
+  }
 });
 
 test('login returns to the requested app page and rejects external or executable destinations', () => {

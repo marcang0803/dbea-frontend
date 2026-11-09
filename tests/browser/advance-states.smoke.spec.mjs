@@ -47,6 +47,22 @@ async function openOtp(page) {
   await page.getByRole('button', { name: 'Continue with SMS code' }).click();
 }
 
+test('pending bank approval retains the existing request without offering funding or submitting again', async ({ page }) => {
+  const calls = await installApi(page, {
+    status: async () => ({ data: { operationId: 13, version: 9, status: 'APPROVAL_RECORDED', loanAccountId: 'test-pending-loan', currentBankStatus: 'Pending', fundingRecoveryError: 'BANK_APPROVAL_PENDING' } }),
+  });
+  await page.goto('/advance/accept?requestKey=bank-pending-request');
+  await expect(page.getByRole('heading', { name: 'Awaiting bank approval' })).toBeVisible();
+  await expect(page.getByText('The bank has not yet approved this loan. Check this request’s status before borrowing again.', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Check request status' }).click();
+  await expect(page.getByRole('button', { name: 'Check request status' })).toBeEnabled();
+  await expect(page.getByRole('heading', { name: 'Awaiting bank approval' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Continue with SMS code' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Confirm funding with SMS code' })).toHaveCount(0);
+  expect(calls.every(call => call.method === 'GET')).toBe(true);
+  expect(calls.filter(call => call.path.includes('/operations/by-request/')).every(call => call.path.endsWith('/bank-pending-request'))).toBe(true);
+});
+
 test('direct P6 review blocks an active borrower before quote and SMS requests', async ({ page }) => {
   const calls = await installApi(page, { active: true });
   await page.goto('/advance/accept');

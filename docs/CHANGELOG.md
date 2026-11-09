@@ -64,6 +64,9 @@ deployment or OutSystems publication.
 
 ### Fixed
 
+- P6 identifies a verified Pending bank decision as awaiting bank approval,
+  rather than describing the loan as approved. Funding remains unavailable
+  until the existing loan is Open; uncertain deposits retain their recovery state.
 - P5 native score APIs preserve calculated zero values instead of omitting them
   from JSON. The Core salary lookup recognises incoming `SALARY` and
   `Monthly Salary` credits without case sensitivity, selects the latest valid
