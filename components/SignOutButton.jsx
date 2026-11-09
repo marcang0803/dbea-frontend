@@ -12,10 +12,9 @@ export default function SignOutButton() {
     setSigningOut(true);
 
     try {
-      await fetch('/api/auth/logout', { method: 'POST' });
+      await fetch('/api/auth/logout', { method: 'POST', cache: 'no-store'  });
     } finally {
-      router.replace('/login');
-      router.refresh();
+      window.location.replace('/login');
     }
   }
 
