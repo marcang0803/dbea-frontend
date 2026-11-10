@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { CORRIDORS, corridorForCode, formatRate } from '@/lib/corridors';
 import { p4Api } from '@/lib/p4Api';
 import { ApiError, isSessionExpired } from '@/lib/p3Api';
 
@@ -34,7 +35,7 @@ export default function RateAlertsPage() {
   const router = useRouter();
 
   const [alerts, setAlerts] = useState([]);
-  const [corridor, setCorridor] = useState('SGD-PHP');
+  const [corridor, setCorridor] = useState(CORRIDORS[0].code);
   const [targetRate, setTargetRate] = useState('');
 
   const [loading, setLoading] = useState(true);
@@ -49,7 +50,7 @@ export default function RateAlertsPage() {
     p4Api
       .listAlerts({ signal: controller.signal })
       .then(({ data }) => {
-        setAlerts(normalizeAlerts(data));
+        setAlerts(normalizeAlerts(data).filter((alert) => alert.isActive === true));
         setLoading(false);
       })
       .catch((err) => {
@@ -82,7 +83,7 @@ export default function RateAlertsPage() {
       : '';
 
   const canSubmit =
-    Boolean(corridor) &&
+    Boolean(corridorForCode(corridor)) &&
     Boolean(targetRate) &&
     !targetRateError &&
     !submitting;
@@ -103,7 +104,7 @@ export default function RateAlertsPage() {
       });
 
       const { data } = await p4Api.listAlerts();
-      setAlerts(normalizeAlerts(data));
+      setAlerts(normalizeAlerts(data).filter((alert) => alert.isActive === true));
       setTargetRate('');
       setSuccess('Your target-rate alert has been created.');
     } catch (err) {
@@ -209,7 +210,9 @@ export default function RateAlertsPage() {
               }
               className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3.5 text-slate-900 outline-none transition focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20"
             >
-              <option value="SGD-PHP">SGD → PHP</option>
+              {CORRIDORS.map((item) => (
+                <option key={item.code} value={item.code}>SGD → {item.currency} ({item.country})</option>
+              ))}
             </select>
           </div>
 
@@ -229,8 +232,8 @@ export default function RateAlertsPage() {
               <input
                 id="target-rate"
                 type="number"
-                min="0.0001"
-                step="0.0001"
+                min="0"
+                step="any"
                 inputMode="decimal"
                 value={targetRate}
                 onChange={(event) => {
@@ -238,12 +241,12 @@ export default function RateAlertsPage() {
                   setError('');
                   setSuccess('');
                 }}
-                placeholder="44.0000"
+                placeholder="Enter target rate"
                 className="min-w-0 flex-1 bg-transparent px-3 py-4 text-right text-xl font-semibold tabular-nums text-slate-900 outline-none"
               />
 
               <span className="text-sm font-medium text-slate-500">
-                PHP
+                {corridorForCode(corridor)?.currency}
               </span>
             </div>
 
@@ -376,7 +379,7 @@ export default function RateAlertsPage() {
 
                     <p className="mt-3 text-2xl font-semibold tabular-nums text-slate-950">
                       S$1 ={' '}
-                      {Number(alert.targetRate).toFixed(4)} PHP
+                      {formatRate(alert.targetRate)} {corridorForCode(alert.corridor)?.currency || 'Currency unavailable'}
                     </p>
                   </div>
 

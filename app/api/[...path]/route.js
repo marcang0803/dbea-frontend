@@ -286,7 +286,7 @@ async function handle(request, context) {
         beneficiary.relationshipLabel || beneficiary.relationship,
       accountLast4: String(beneficiary.accountId || '').slice(-4),
       bankName: beneficiary.partnerName || beneficiary.bankName || 'Recipient bank',
-      payoutCurrency: beneficiary.payoutCurrency || 'PHP',
+      payoutCurrency: beneficiary.payoutCurrency || '',
     }));
 
     return NextResponse.json({

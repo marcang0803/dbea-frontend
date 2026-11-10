@@ -1,3 +1,5 @@
+import { corridorForCode, corridorForCurrency } from '@/lib/corridors';
+import { mockForwardRate } from '@/lib/mock/p4Fixtures';
 // Mock API for local development without OutSystems.
 // Active only when NEXT_PUBLIC_USE_MOCK_API=true AND not a production build.
 // Mirrors the P3 REST contracts and the { success, data, errors } envelope.
@@ -33,7 +35,6 @@ const unread = () => store.notifications.filter((n) => !n.isRead).length;
 const formatMockAmount = (value) =>
   Number(value).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const lockPeriods = new Set(['1M', '3M', '6M', '1Y']);
-const mockForwardRates = { '1M': 43.9, '3M': 43.75, '6M': 43.55, '1Y': 43.2 };
 
 function maturityDateFor(period) {
   const months = { '1M': 1, '3M': 3, '6M': 6, '1Y': 12 }[period];
@@ -306,7 +307,8 @@ async function handle(request, { params }) {
       return fail(400, 'INVALID_PERIOD', 'Period must be 1M, 3M, 6M or 1Y.');
     }
 
-    const forwardRate = mockForwardRates[period];
+    const forwardRate = mockForwardRate(beneficiary.payoutCurrency, period);
+    if (!corridorForCurrency(beneficiary.payoutCurrency) || !forwardRate) return fail(400, 'INVALID_CORRIDOR', 'No forward quote is available for this payout currency.');
     return ok({
       forwardRate,
       recipientAmount: Number((amountSGD * forwardRate).toFixed(2)),
@@ -332,6 +334,8 @@ async function handle(request, { params }) {
     if (!beneficiary || !Number.isFinite(amountSGD) || amountSGD <= 0 || !lockPeriods.has(period)) {
       return fail(400, 'INVALID_REQUEST', 'Beneficiary, amount and period are required.');
     }
+    const lockedRate = mockForwardRate(beneficiary.payoutCurrency, period);
+    if (!corridorForCurrency(beneficiary.payoutCurrency) || !lockedRate) return fail(400, 'INVALID_CORRIDOR', 'No forward quote is available for this payout currency.');
     if (!body.challengeId || !body.otpCode || !referenceId) {
       return fail(400, 'INVALID_REQUEST', 'Challenge ID, OTP code and reference ID are required.');
     }
@@ -361,12 +365,12 @@ async function handle(request, { params }) {
 
     challenge.used = true;
     const lockId = store.nextRateLockId++;
-    const lockedRate = mockForwardRates[period];
     const createdOn = new Date().toISOString();
     const lock = {
       lockId,
       beneficiaryLinkId: beneficiary.id,
       fxForwardId: 9000 + lockId,
+      quoteCurrency: beneficiary.payoutCurrency,
       lockedRate,
       amountSGD,
       period,
@@ -379,8 +383,8 @@ async function handle(request, { params }) {
     store.notifications.unshift({
       id: store.nextNotificationId++,
       type: 'LOCK',
-      title: 'Rate locked',
-      message: `S$${formatMockAmount(amountSGD)} locked at ${lockedRate.toFixed(2)} PHP.`,
+      title: `SGD→${beneficiary.payoutCurrency} rate locked`,
+      message: `S$${formatMockAmount(amountSGD)} locked at ${lockedRate} ${beneficiary.payoutCurrency}.`,
       link: '/rates/locks',
       isRead: false,
       createdOn,
@@ -391,7 +395,7 @@ async function handle(request, { params }) {
 
   // P4 GetMyAlerts
   if (route === 'GET rates/alerts') {
-    return ok([...store.rateAlerts].sort((a, b) => b.createdOn.localeCompare(a.createdOn)));
+    return ok(store.rateAlerts.filter((alert) => alert.isActive === true).sort((a, b) => b.createdOn.localeCompare(a.createdOn)));
   }
 
   // P4 CreateAlert
@@ -400,7 +404,8 @@ async function handle(request, { params }) {
     const corridor = String(body.corridor || '').trim().toUpperCase();
     const targetRate = Number(body.targetRate);
 
-    if (!corridor || !Number.isFinite(targetRate) || targetRate <= 0) {
+    if (!corridorForCode(corridor)) return fail(400, 'INVALID_CORRIDOR', 'Select a supported currency corridor.');
+    if (!Number.isFinite(targetRate) || targetRate <= 0) {
       return fail(400, 'INVALID_REQUEST', 'Corridor and a positive target rate are required.');
     }
 
