@@ -35,7 +35,7 @@ function buildReceipt(quote, recentRemittance, quoteId) {
     completedOn: recentRemittance.createdOn,
     beneficiary: {
       nickname: recentRemittance.nickname || 'Recipient',
-      payoutCurrency: recentRemittance.payoutCurrency || 'PHP',
+      payoutCurrency: recentRemittance.payoutCurrency || '',
     },
   };
 }
@@ -130,7 +130,7 @@ export default function TransferReceipt({ quoteId }) {
   const underReview = ['DEBITED', 'FEE_REVIEW'].includes(normalizeStatus(receipt.status));
   const beneficiary = receipt.beneficiary ?? {};
   const nickname = beneficiary.nickname || 'Recipient';
-  const payoutCurrency = beneficiary.payoutCurrency || 'PHP';
+  const payoutCurrency = beneficiary.payoutCurrency || '';
   const customerRate = Number(receipt.customerRate);
 
   return (
