@@ -125,7 +125,7 @@ export default function RateLockPage() {
   );
 
   const currency = selectedBeneficiary?.payoutCurrency?.trim().toUpperCase() || '';
-  const currencyError = selectedBeneficiary ? payoutCurrencyError(currency) : '';
+  const currencyError = selectedBeneficiary ? payoutCurrencyError(currency, period) : '';
   const numericAmount = Number(amount);
 
   const amountError = useMemo(() => {
@@ -199,11 +199,20 @@ export default function RateLockPage() {
           !data?.maturityDate || !Number.isFinite(Date.parse(data.maturityDate))) {
         throw new ApiError('No valid forward quote is available for this currency and period.', 502);
       }
-      setPreview(data);
+      const snapshotReferenceId =
+        typeof data?.referenceId === 'string'
+          ? data.referenceId.trim()
+          : '';
 
-      // This value is no longer than 50 characters and remains unchanged
-      // between requesting and verifying the LOCK OTP.
-      setReferenceId(crypto.randomUUID());
+      if (!/^[1-9]\d*$/.test(snapshotReferenceId)) {
+        throw new ApiError(
+          'The preview did not return a valid reference. Please preview again.',
+          502,
+        );
+      }
+
+      setPreview(data);
+      setReferenceId(snapshotReferenceId);
     } catch (err) {
       if (requestId !== previewRequest.current) return;
       if (isSessionExpired(err)) {
