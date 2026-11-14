@@ -33,8 +33,9 @@ tested Bun version; use `bun install --frozen-lockfile` for reproducible install
 `bunfig.toml` disables Bun's automatic environment-file loading so Next.js keeps
 its normal development/production selection and local-override precedence.
 
-`.env.development` turns on **mock mode** (`NEXT_PUBLIC_USE_MOCK_API=true`) for supported
-shared screens, using the stores in `lib/mock/`. P6 advance routes always use the real
+Set `NEXT_PUBLIC_USE_MOCK_API=true` in an ignored local environment file to enable
+**mock mode** for supported shared screens, using the stores in `lib/mock/`.
+`.env.development` is local and untracked. P6 advance routes always use the real
 backend, including OTP. See [Development](docs/DEVELOPMENT.md) for real integration setup.
 
 | Page | What you can try |
@@ -49,7 +50,7 @@ Mock data lives in memory. Restart `bun run dev` to reset it.
 Routes now also include family, remittance, rate locks/alerts and `/advance/accept`.
 Their availability depends on each screen's mock support and backend configuration.
 
-P5 uses the mock API in local development by default. The offer page scores the mock user and checks a sample S$500 against 3-, 6-, and 12-month terms. The advance schedule uses a seeded example; upcoming monthly rows are projected from the advance's next due date because the backend repayment-history endpoint does not return future schedule rows.
+With mock mode enabled, P5's offer page scores the mock user and checks a sample S$500 against 3-, 6-, and 12-month terms. The advance schedule uses a seeded example; upcoming monthly rows are projected from the advance's next due date because the backend repayment-history endpoint does not return future schedule rows.
 
 For the real P5 services, set `NEXT_PUBLIC_USE_MOCK_API=false` in `.env.development.local`, then sign in with a backend account. The frontend calls ScoreCS, Score, and Advance through `/api`; user identity is read from `/api/auth/me`. P5 hands `amount`, `months`, and `snapshotId` to `/advance/confirm`, which reuses P6's `/advance/accept` screen. P6 revalidates the selected terms through its real gateway; new applications support 3, 6 or 12 months, subject to P5 eligibility and bank quote verification.
 
@@ -122,6 +123,6 @@ You don't need it to view the frontend.
 ## Rules for this repo
 - The browser only calls our own `/api/...` routes. No OutSystems URLs, tokens, tBank or SMULab
   credentials in frontend code.
-- Secrets go in `.env.local` / `infra/rabbitmq/.env` (git-ignored). `.env.development` holds
-  non-secret dev defaults only.
+- Local environment settings stay in git-ignored files such as `.env.local`,
+  `.env.development` and `infra/rabbitmq/.env`. Commit `.env.example` templates only.
 - Imports use the `@/` alias (root of the repo).

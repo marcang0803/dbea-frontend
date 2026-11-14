@@ -15,8 +15,14 @@ const INPUT = 'mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3
 const PRIMARY = 'w-full rounded-2xl bg-emerald-700 px-5 py-3.5 font-semibold text-white transition hover:bg-emerald-800 focus-visible:ring-4 focus-visible:ring-emerald-600/30 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500';
 const SECONDARY = 'rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:ring-4 focus-visible:ring-emerald-600/20 disabled:opacity-50';
 
-function remember(key) {
-  try { sessionStorage.setItem(STORAGE_KEY, key); } catch { /* The URL also retains the recovery reference. */ }
+function remember(key, ownerId) {
+  if (!ownerId) return false;
+  try { sessionStorage.setItem(`${STORAGE_KEY}:${ownerId}`, key); return true; } catch { return false; }
+}
+
+function forget(ownerId) {
+  if (!ownerId) return;
+  try { sessionStorage.removeItem(`${STORAGE_KEY}:${ownerId}`); } catch { /* URL recovery also clears below. */ }
 }
 
 async function explainActiveAdvance(data) {
@@ -63,7 +69,8 @@ export default function AdvanceAcceptance({ initialAmount = '', initialMonths = 
   const [hasActiveAdvance, setHasActiveAdvance] = useState(false);
   const [operation, setOperation] = useState(null);
   const [requestReference, setRequestReference] = useState(initialRequestKey);
-  const [busy, setBusy] = useState(Boolean(initialRequestKey));
+  const [busy, setBusy] = useState(true);
+  const [legacyNotice, setLegacyNotice] = useState(false);
   const [error, setError] = useState(initialMonths && !initialRequestKey && !isAdvanceTerm(Number(initialMonths)) ? 'That repayment term is no longer offered. Choose 3, 6 or 12 months.' : '');
   const [showOtp, setShowOtp] = useState(false);
   const [otpAttempted, setOtpAttempted] = useState(false);
@@ -72,6 +79,7 @@ export default function AdvanceAcceptance({ initialAmount = '', initialMonths = 
   const [cards, setCards] = useState('');
   const [agreed, setAgreed] = useState(false);
   const keyRef = useRef(initialRequestKey);
+  const ownerRef = useRef('');
   const submitting = useRef(false);
   const otpModalRef = useRef(null);
   const otpTriggerRef = useRef(null);
@@ -80,7 +88,7 @@ export default function AdvanceAcceptance({ initialAmount = '', initialMonths = 
   const adoptReference = useCallback((key) => {
     keyRef.current = key;
     setRequestReference(key);
-    remember(key);
+    remember(key, ownerRef.current);
     window.history.replaceState(null, '', `/advance/accept?requestKey=${encodeURIComponent(key)}`);
   }, []);
 
@@ -96,13 +104,18 @@ export default function AdvanceAcceptance({ initialAmount = '', initialMonths = 
     router.replace(`/login?next=${encodeURIComponent(next)}`);
   }, [router]);
 
-  const recover = useCallback(async (key, reviewNewOffer = false) => {
+  const recover = useCallback(async (key, reviewNewOffer = false, legacy = false) => {
     try {
       let data = await p6Api.getStatus(key);
+      const remembered = remember(key, ownerRef.current);
+      if (legacy && remembered) {
+        // Only a successful owner-scoped backend read can migrate an old key.
+        try { if (sessionStorage.getItem(STORAGE_KEY) === key) sessionStorage.removeItem(STORAGE_KEY); } catch { /* Keep the old reference if storage is unavailable. */ }
+      }
       if (reviewNewOffer && isFinishedAcceptance(data)) {
         // A deliberate offer handoff can leave a finished receipt. Never release
         // a missing, incomplete or unresolved request to create a new intent.
-        try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* The URL still contains the new offer. */ }
+        forget(ownerRef.current);
         keyRef.current = ''; setRequestReference(''); setOperation(null); setError('');
         return;
       }
@@ -123,6 +136,14 @@ export default function AdvanceAcceptance({ initialAmount = '', initialMonths = 
           }
         } catch (activeError) {
           if (activeError.status === 401) { login(advanceReturnPath({ requestKey: key })); return; }
+          if (legacy && reviewNewOffer && activeError.status === 404) {
+            // The old unscoped key may belong to a different login. Keep it
+            // untouched, but do not assign it to this account's new offer.
+            // Explicit URLs and account-scoped uncertain requests never use this path.
+            keyRef.current = ''; setRequestReference(''); setOperation(null); setError('');
+            setLegacyNotice(true);
+            return;
+          }
           // A missing active lookup never proves a submitted request is safe to repeat.
         }
         setOperation((previous) => ({ ...previous, status: 'UNKNOWN', errorCode: 'REQUEST_NOT_VISIBLE' }));
@@ -135,19 +156,33 @@ export default function AdvanceAcceptance({ initialAmount = '', initialMonths = 
 
   useEffect(() => {
     let active = true;
-    // The promise callback keeps initial state changes out of the effect body.
-    Promise.resolve().then(() => {
+    Promise.resolve().then(async () => {
+      let ownerId;
+      try { ownerId = await p6Api.getIdentity(); }
+      catch (err) {
+        if (!active) return;
+        if (initialRequestKey && err.status === 401) login(advanceReturnPath({ requestKey: initialRequestKey }));
+        else if (err.status !== 401) setError(err.message || 'Your account could not be verified.');
+        setBusy(false);
+        return;
+      }
+      if (!active) return;
+      ownerRef.current = ownerId;
       let key = initialRequestKey;
-      try { key ||= sessionStorage.getItem(STORAGE_KEY) || ''; } catch { /* URL recovery remains available. */ }
-      if (active && key) {
+      let legacy = false;
+      try {
+        key ||= sessionStorage.getItem(`${STORAGE_KEY}:${ownerId}`) || '';
+        if (!key) { key = sessionStorage.getItem(STORAGE_KEY) || ''; legacy = Boolean(key); }
+      } catch { /* URL recovery remains available. */ }
+      if (key) {
         keyRef.current = key;
         setRequestReference(key);
         setBusy(true);
-        recover(key, !initialRequestKey && Boolean(initialAmount && initialMonths));
-      }
+        await recover(key, !initialRequestKey && Boolean(initialAmount && initialMonths), legacy);
+      } else setBusy(false);
     });
     return () => { active = false; };
-  }, [initialRequestKey, initialAmount, initialMonths, recover]);
+  }, [initialRequestKey, initialAmount, initialMonths, recover, login]);
 
   function clearOffer() { setOffer(null); setError(''); setAgreed(false); }
 
@@ -157,6 +192,7 @@ export default function AdvanceAcceptance({ initialAmount = '', initialMonths = 
     submitting.current = true;
     setBusy(true); setError(''); setOffer(null); setAgreed(false);
     try {
+      ownerRef.current = await p6Api.getIdentity();
       const availability = await p6Api.getActiveAdvances();
       setHasActiveAdvance(availability.hasActiveAdvance);
       if (availability.hasActiveAdvance) return;
@@ -179,7 +215,7 @@ export default function AdvanceAcceptance({ initialAmount = '', initialMonths = 
     const key = keyRef.current || crypto.randomUUID();
     keyRef.current = key;
     setRequestReference(key);
-    remember(key);
+    remember(key, ownerRef.current);
     // Only a non-secret request reference is persisted; never the code or token.
     window.history.replaceState(null, '', `/advance/accept?requestKey=${encodeURIComponent(key)}`);
     try {
@@ -196,7 +232,7 @@ export default function AdvanceAcceptance({ initialAmount = '', initialMonths = 
       if (canDiscardUnsubmittedAcceptance(err.data, hasPreviousAttempt)) {
         // A new reference may be released only with proxy proof that no C9 POST
         // was attempted. A 404, backend refusal or lost response is insufficient.
-        try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* URL recovery also clears below. */ }
+        forget(ownerRef.current);
         keyRef.current = '';
         const next = advanceReturnPath({ amount, months, snapshotId: initialSnapshotId });
         window.history.replaceState(null, '', next);
@@ -267,7 +303,7 @@ export default function AdvanceAcceptance({ initialAmount = '', initialMonths = 
   }
 
   function reset() {
-    try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* Nothing to clear. */ }
+    forget(ownerRef.current);
     keyRef.current = ''; setRequestReference(''); setOperation(null); setOffer(null); setError(''); setAgreed(false); setOtpAttempted(false);
     window.history.replaceState(null, '', '/advance/accept');
   }
@@ -338,6 +374,7 @@ export default function AdvanceAcceptance({ initialAmount = '', initialMonths = 
           <section className="min-w-0" aria-labelledby="advance-title">
           <h1 id="advance-title" className="text-3xl font-semibold leading-tight tracking-tight text-slate-950 sm:text-4xl lg:text-5xl">A little support,<br />with clear terms.</h1>
           <p className="mt-4 max-w-lg text-sm leading-6 text-slate-500 sm:text-base sm:leading-7">Review your eligibility and the bank’s repayment terms before deciding.</p>
+          {legacyNotice && <p role="status" className="mt-4 rounded-xl border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-600">An older request reference is kept separately in this tab for recovery. You are reviewing this account’s new offer; it has not been submitted.</p>}
           <form onSubmit={checkTerms} className="mt-7 rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm sm:p-7 lg:mt-8">
             <label htmlFor="advance-amount" className="text-sm font-medium text-slate-700">How much do you need? <span className="text-slate-400">SGD</span></label>
             <input id="advance-amount" className={INPUT} type="number" inputMode="decimal" min="0.01" max="1000" step="0.01" required value={amount} disabled={busy} onChange={(event) => { setAmount(event.target.value); clearOffer(); }} />

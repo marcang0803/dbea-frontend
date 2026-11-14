@@ -159,6 +159,15 @@ cancellation only for a `RECEIVED` operation with an ID and version, no
 reconciliation or outstanding dispatch, and no loan or advance reference.
 C9 enforces the final authorization and state transition.
 
+Saved references are scoped to the user returned by `/api/auth/me`, so changing
+accounts in the same tab does not restore another account's confirmation screen.
+An older unscoped reference migrates only after a successful owner-scoped status
+read. On an explicit new-offer handoff, if both that legacy lookup and the current
+request lookup return 404, the legacy reference stays saved separately while the
+new offer remains reviewable. Explicit request URLs and references already bound
+to the current account retain uncertain recovery on 404. None of these reads
+submits an advance or establishes that an earlier bank operation never executed.
+
 The P6 gateway preserves C9's error data on 409/503 responses. This differs from
 the shared proxy's generic error normalization. Do not replace the P6 adapter
 with an error wrapper that drops the operation ID, version or recovery state.

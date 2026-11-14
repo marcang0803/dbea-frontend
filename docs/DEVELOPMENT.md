@@ -33,8 +33,10 @@ child processes. Next.js remains responsible for loading the environment for
 into production and preserves `.env.development.local` / `.env.production.local`
 overrides. Explicit shell environment variables still take precedence.
 
-Open `http://localhost:3000`. Development defaults enable the mock handlers for
-supported shared screens. Mock stores are in memory and reset on server restart.
+Open `http://localhost:3000`. Set `NEXT_PUBLIC_USE_MOCK_API=true` in an ignored local
+environment file to enable mock handlers for supported shared screens.
+`.env.development` is untracked; use `.env.example` as the shared configuration
+template. Mock stores are in memory and reset on server restart.
 P6 advance routes always use real services, including their OTP request.
 
 ## Configure real integrations

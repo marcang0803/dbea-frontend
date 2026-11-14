@@ -15,8 +15,8 @@ next-env.d.ts
 .env
 .env*.local
 infra/rabbitmq/.env
-# committed on purpose (no secrets): dev defaults + templates
-!.env.development
+# local development settings stay untracked; commit templates only
+.env.development
 !.env.example
 !infra/rabbitmq/.env.example
 

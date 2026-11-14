@@ -9,7 +9,7 @@ const OFFER = {
 const RECEIVED = { operationId: 6, status: 'RECEIVED', version: 1, needsReconciliation: false };
 
 // Browser-only responses: no session, SMS, OutSystems or bank request leaves the test.
-async function installApi(page, { offer = OFFER, accept, status, cancel, challenge, current, resume, active = false } = {}) {
+async function installApi(page, { offer = OFFER, accept, status, cancel, challenge, current, resume, active = false, userId = 51178 } = {}) {
   const calls = [];
   await page.route('**/api/**', async (route) => {
     const request = route.request();
@@ -17,7 +17,8 @@ async function installApi(page, { offer = OFFER, accept, status, cancel, challen
     const call = { path, query: new URL(request.url()).search, method: request.method(), body: request.postDataJSON(), key: request.headers()['idempotency-key'] };
     calls.push(call);
     let reply;
-    if (path === '/api/advance/active') reply = { data: { hasActiveAdvance: active } };
+    if (path === '/api/auth/me') reply = { data: { userId } };
+    else if (path === '/api/advance/active') reply = { data: { hasActiveAdvance: active } };
     else if (path === '/api/advance/eligibility') reply = { data: offer };
     else if (path === '/api/otp/challenges') reply = challenge ? await challenge(call) : { data: { challengeId: 'browser-test-challenge', maskedMobile: '+65 ****0000', expiresAt: new Date(Date.now() + 300_000).toISOString() } };
     else if (path === '/api/advance/acceptances') reply = accept ? await accept(call) : { data: RECEIVED };
@@ -69,7 +70,7 @@ test('direct P6 review blocks an active borrower before quote and SMS requests',
   await page.getByRole('button', { name: 'Check my terms' }).click();
   await expect(page.getByRole('heading', { name: 'You already have an active advance' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Continue with SMS code' })).toHaveCount(0);
-  expect(calls.map(call => call.path)).toEqual(['/api/advance/active']);
+  expect(calls.filter(call => call.path.startsWith('/api/advance/')).map(call => call.path)).toEqual(['/api/advance/active']);
 });
 
 test('an advance opened in another tab is checked again before requesting SMS', async ({ page }) => {
@@ -137,7 +138,7 @@ test('disabled acceptance still shows real returned terms without requesting OTP
   await reviewOffer(page);
   await expect(page.getByText('Quoted total repayment', { exact: true }).locator('..')).toContainText('100.60');
   await expect(page.getByRole('button', { name: 'Confirmation unavailable' })).toBeDisabled();
-  expect(calls.map((call) => call.path)).toEqual(['/api/advance/active', '/api/advance/eligibility']);
+  expect(calls.filter(call => call.path.startsWith('/api/advance/')).map(call => call.path)).toEqual(['/api/advance/active', '/api/advance/eligibility']);
 });
 
 test('a matching six-month offer preserves the handoff term', async ({ page }) => {
@@ -191,7 +192,7 @@ test('an adjusted amount also requires choosing the returned offer', async ({ pa
   await page.getByRole('button', { name: 'Review this offer' }).click();
   await expect(page.getByLabel('How much do you need? SGD')).toHaveValue('100');
   await expect(page.getByRole('heading', { name: 'A few details for the bank' })).toBeVisible();
-  expect(calls.map(call => call.path)).toEqual(['/api/advance/active', '/api/advance/eligibility']);
+  expect(calls.filter(call => call.path.startsWith('/api/advance/')).map(call => call.path)).toEqual(['/api/advance/active', '/api/advance/eligibility']);
 });
 
 test('uncertain funding retains one borrowing request through reload and later confirmation', async ({ page }) => {
@@ -353,9 +354,62 @@ test('unknown submission and 404 status preserve the original reference across r
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Request status unavailable' })).toBeVisible();
   expect(new URL(page.url()).searchParams.get('requestKey')).toBe(key);
-  expect(await page.evaluate(() => sessionStorage.getItem('remitease:p6:pending-request'))).toBe(key);
+  expect(await page.evaluate(() => sessionStorage.getItem('remitease:p6:pending-request:51178'))).toBe(key);
   await expect(page.getByRole('button', { name: 'Review another offer' })).toHaveCount(0);
   expect(calls.filter((call) => call.path.endsWith('/acceptances'))).toHaveLength(1);
+});
+
+test('a new account reviews its selected plan without inheriting another account request', async ({ page }) => {
+  const calls = await installApi(page, { userId: 51179 });
+  await page.goto('/home');
+  await page.evaluate(() => sessionStorage.setItem('remitease:p6:pending-request:51178', 'older-account-request'));
+  await page.goto('/advance/confirm?amount=500&months=6&snapshotId=66');
+  await expect(page.getByLabel('How much do you need? SGD')).toBeEnabled();
+  await expect(page.getByLabel('How much do you need? SGD')).toHaveValue('500');
+  await expect(page.getByLabel('Repayment term', { exact: true })).toHaveValue('6');
+  await expect(page.getByRole('listitem').filter({ hasText: 'Your request' })).toHaveAttribute('aria-current', 'step');
+  expect(calls.filter(call => call.path.includes('/operations/'))).toHaveLength(0);
+  expect(calls.every(call => call.method === 'GET')).toBe(true);
+  expect(await page.evaluate(() => sessionStorage.getItem('remitease:p6:pending-request:51178'))).toBe('older-account-request');
+});
+
+test('a missing legacy reference does not replace a new account offer and remains saved', async ({ page }) => {
+  const calls = await installApi(page, { status: () => ({ status: 404, errors: [{ code: 'NOT_FOUND' }] }) });
+  await page.goto('/home');
+  await page.evaluate(() => sessionStorage.setItem('remitease:p6:pending-request', 'legacy-account-request'));
+  await page.goto('/advance/confirm?amount=500&months=6&snapshotId=66');
+  await expect(page.getByLabel('How much do you need? SGD')).toBeEnabled();
+  await expect(page.getByLabel('How much do you need? SGD')).toHaveValue('500');
+  await expect(page.getByLabel('Repayment term', { exact: true })).toHaveValue('6');
+  await expect(page.getByText(/An older request reference is kept separately/)).toBeVisible();
+  expect(await page.evaluate(() => sessionStorage.getItem('remitease:p6:pending-request'))).toBe('legacy-account-request');
+  expect(await page.evaluate(() => sessionStorage.getItem('remitease:p6:pending-request:51178'))).toBeNull();
+  expect(calls.filter(call => call.path.includes('/operations/')).map(call => call.path)).toEqual([
+    '/api/advance/operations/by-request/legacy-account-request', '/api/advance/operations/current',
+  ]);
+  expect(calls.every(call => call.method === 'GET')).toBe(true);
+});
+
+test('a current-account uncertain request still blocks a new offer after a 404', async ({ page }) => {
+  const calls = await installApi(page, { status: () => ({ status: 404, errors: [{ code: 'NOT_FOUND' }] }) });
+  await page.goto('/home');
+  await page.evaluate(() => sessionStorage.setItem('remitease:p6:pending-request:51178', 'owned-uncertain-request'));
+  await page.goto('/advance/confirm?amount=500&months=6&snapshotId=66');
+  await expect(page.getByRole('heading', { name: 'Request status unavailable' })).toBeVisible();
+  await expect(page.getByLabel('How much do you need? SGD')).toHaveCount(0);
+  expect(await page.evaluate(() => sessionStorage.getItem('remitease:p6:pending-request:51178'))).toBe('owned-uncertain-request');
+  expect(calls.every(call => call.method === 'GET')).toBe(true);
+});
+
+test('a verified legacy request migrates to its signed-in owner and retains pending recovery', async ({ page }) => {
+  const calls = await installApi(page, { status: () => ({ data: { ...RECEIVED, status: 'APPROVAL_RECORDED', loanAccountId: 'existing-loan' } }) });
+  await page.goto('/home');
+  await page.evaluate(() => sessionStorage.setItem('remitease:p6:pending-request', 'verified-legacy-request'));
+  await page.goto('/advance/confirm?amount=500&months=6&snapshotId=66');
+  await expect(page.getByRole('heading', { name: 'Confirmation pending' })).toBeVisible();
+  expect(await page.evaluate(() => sessionStorage.getItem('remitease:p6:pending-request:51178'))).toBe('verified-legacy-request');
+  expect(await page.evaluate(() => sessionStorage.getItem('remitease:p6:pending-request'))).toBeNull();
+  expect(calls.every(call => call.method === 'GET')).toBe(true);
 });
 
 test('only proven local rejection releases a new reference', async ({ page }) => {
@@ -365,7 +419,7 @@ test('only proven local rejection releases a new reference', async ({ page }) =>
   await page.getByRole('button', { name: 'Confirm advance', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Request not submitted' })).toBeVisible();
   expect(new URL(page.url()).searchParams.has('requestKey')).toBe(false);
-  expect(await page.evaluate(() => sessionStorage.getItem('remitease:p6:pending-request'))).toBeNull();
+  expect(await page.evaluate(() => sessionStorage.getItem('remitease:p6:pending-request:51178'))).toBeNull();
   await page.getByRole('button', { name: 'Return to review' }).click();
   await expect(page.getByRole('button', { name: 'Check my terms' })).toBeVisible();
 });
@@ -410,7 +464,7 @@ test('conflicting acceptance adopts the owned original request instead of retain
   await expect(page).toHaveURL(/requestKey=original-approved-request$/);
   await expect(page.getByRole('heading', { name: /Loan approved.*funding pending/ })).toBeVisible();
   await expect(page.getByText('7 Dec 2026', { exact: true })).toBeVisible();
-  expect(await page.evaluate(() => sessionStorage.getItem('remitease:p6:pending-request'))).toBe(RECOVERABLE.requestKey);
+  expect(await page.evaluate(() => sessionStorage.getItem('remitease:p6:pending-request:51178'))).toBe(RECOVERABLE.requestKey);
   expect(calls.filter(x => x.path.endsWith('/acceptances'))).toHaveLength(1);
 });
 
@@ -472,16 +526,16 @@ for (const [name, previous, shouldReview] of [
     const calls = await installApi(page, { status: () => ({ data: previous }) });
     await page.goto('/advance/accept?requestKey=previous-request');
     await expect(page.getByText('Request reference: previous-request')).toBeVisible();
-    await page.evaluate(() => sessionStorage.setItem('remitease:p6:pending-request', 'previous-request'));
+    await page.evaluate(() => sessionStorage.setItem('remitease:p6:pending-request:51178', 'previous-request'));
     await page.goto('/advance/confirm?amount=125.50&months=3&snapshotId=66');
     if (shouldReview) {
       await expect(page.getByLabel('How much do you need? SGD')).toHaveValue('125.50');
       await expect(page.getByLabel('Repayment term', { exact: true })).toHaveValue('3');
-      await expect.poll(() => page.evaluate(() => sessionStorage.getItem('remitease:p6:pending-request'))).toBeNull();
+      await expect.poll(() => page.evaluate(() => sessionStorage.getItem('remitease:p6:pending-request:51178'))).toBeNull();
     } else {
       await expect(page.getByRole('heading', { name: 'Confirmation pending' })).toBeVisible();
       await expect(page.getByLabel('How much do you need? SGD')).toHaveCount(0);
-      expect(await page.evaluate(() => sessionStorage.getItem('remitease:p6:pending-request'))).toBe('previous-request');
+      expect(await page.evaluate(() => sessionStorage.getItem('remitease:p6:pending-request:51178'))).toBe('previous-request');
     }
     expect(calls.filter(call => call.method !== 'GET')).toHaveLength(0);
   });

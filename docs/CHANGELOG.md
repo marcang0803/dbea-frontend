@@ -33,6 +33,14 @@ deployment or OutSystems publication.
 
 ### Changed
 
+- Untrack `.env.development` so local development settings follow `.gitignore`;
+  shared configuration remains documented in `.env.example`.
+
+- P6 pending-request recovery is scoped to the signed-in account. Selecting an
+  offer after switching accounts no longer inherits another user's confirmation
+  screen. Legacy references are preserved, and owner-bound uncertain requests
+  still retain recovery rather than permitting automatic resubmission.
+
 - P5 scoring switches from manually entered `RemittanceHistory` rows to the
   linked user's tBank ledger after separate native publication. It counts
   recognised outgoing remittance principal, supports explicitly labelled
