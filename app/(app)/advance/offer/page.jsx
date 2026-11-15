@@ -345,7 +345,6 @@ export default function AdvanceOfferPage() {
                       <p role="status" className="mt-3 text-sm text-red-700">{plan.error}</p>
                     ) : result ? (
                       <>
-                        {result.isEligible && result.selectedTenor !== plan.tenor && <p className="mt-3 text-sm text-amber-800">The eligibility service returned {result.selectedTenor} months. This {plan.tenor}-month plan is unavailable.</p>}
                         {result.isEligible && result.selectedPlanAmount !== Number(requestedAmount) && <p className="mt-3 text-sm text-amber-800">The returned amount is {formatMoney(result.selectedPlanAmount)}. Update your request before continuing.</p>}
                         <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
                           <div>
