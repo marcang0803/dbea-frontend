@@ -111,15 +111,8 @@ export default function ConfirmTransfer({ quoteId }) {
           <RateRow label="You send" strong>{formatMoney(quote.amountSGD)}</RateRow>
           <RateRow label="Transfer fee">{formatMoney(quote.fee)}</RateRow>
           <RateRow label="Our exchange rate">S$1 = {Number(quote.customerRate).toFixed(4)} {quote.beneficiary.payoutCurrency}</RateRow>
-          <RateRow label="Market rate">S$1 = {Number(quote.marketRate).toFixed(4)} {quote.beneficiary.payoutCurrency}</RateRow>
         </dl>
       </section>
-
-      {quote.savings > 0 && (
-        <p className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          Your recipient gets {formatMoney(quote.savings, quote.beneficiary.payoutCurrency)} more than the bank comparison.
-        </p>
-      )}
 
       <div className="mt-6 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
         <p className="font-medium text-slate-900">Rate protected for 10 minutes</p>
