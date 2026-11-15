@@ -67,7 +67,9 @@ export default function HomePage() {
     fetchSummary();
   }
 
-  const recent = summary?.recentRemittances ?? [];
+  const recent = (summary?.recentRemittances ?? []).filter(
+    (remittance) => String(remittance?.status ?? '').toUpperCase() !== 'QUOTED',
+  ).slice(0, 5);
 
   return (
     <main className="mx-auto max-w-md px-5 pb-12 pt-7">
